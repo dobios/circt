@@ -22,7 +22,7 @@
 
 #include "mlir/Pass/Pass.h"
 
-namespace rtlil {
+namespace circt::rtlil {
 // std::unique_ptr<mlir::Pass> createLowerToAffinePass();
 // std::unique_ptr<mlir::Pass> createLowerToLLVMPass();
 } // namespace rtlil

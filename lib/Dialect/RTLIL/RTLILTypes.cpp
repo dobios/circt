@@ -4,7 +4,7 @@
 
 using namespace mlir;
 
-namespace rtlil {
+namespace circt::rtlil {
 bool isMValueType(mlir::Type type) {
     if (isa<MValueType>(type))
         return true;

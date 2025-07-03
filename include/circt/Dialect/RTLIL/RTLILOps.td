@@ -23,7 +23,7 @@ def RTLIL_Dialect : Dialect {
         This dialect is minimal example to implement rtlil-world kind of sample code
         for MLIR.
     }];
-    let cppNamespace = "::rtlil";
+    let cppNamespace = "::circt::rtlil";
     // let hasConstantMaterializer = 1;
     let useDefaultTypePrinterParser = 1;
     let useDefaultAttributePrinterParser = 1;
@@ -75,7 +75,7 @@ def StateEnumAttr: I8EnumAttr<"StateEnum", "RTLIL::State model",
     [StateS0, StateS1, StateSx, StateSz, StateSa]> {
   let stringToSymbolFnName = "ConvertToEnum";
   let symbolToStringFnName = "ConvertToString";
-  let cppNamespace = "::rtlil";
+  let cppNamespace = "::circt::rtlil";
 }
 
 // A parameterized integer type. Declares the hw::IntType in C++.
@@ -87,7 +87,7 @@ def MValueTypeImpl : RTLIL_Type<"MValue"> {
   let mnemonic = "val";
 }
 
-def RTLILValue : DialectType<RTLIL_Dialect, CPred<"::rtlil::isMValueType($_self)">, "value">;
+def RTLILValue : DialectType<RTLIL_Dialect, CPred<"::circt::rtlil::isMValueType($_self)">, "value">;
 
 def ConstAttr
   : TypedArrayAttrBase<StateEnumAttr, "constant multi-valued bitvec">;

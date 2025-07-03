@@ -4,7 +4,7 @@
 #include "mlir/TableGen/Type.h"
 #include "RTLIL.h"
 
-namespace rtlil {
+namespace circt::rtlil {
 bool isMValueType(mlir::Type type);
 }; // namespace rtlil
 

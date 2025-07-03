@@ -24,7 +24,7 @@
 #include "circt/Dialect/RTLIL/RTLILOps.h"
 
 using namespace mlir;
-using namespace rtlil;
+using namespace circt::rtlil;
 
 //===----------------------------------------------------------------------===//
 // RTLIL dialect.
