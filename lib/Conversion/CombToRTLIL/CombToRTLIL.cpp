@@ -14,6 +14,7 @@
 #include "circt/Dialect/RTLIL/RTLIL.h"
 #include "circt/Support/LLVM.h"
 #include "circt/Support/Naming.h"
+#include "mlir/IR/Attributes.h"
 #include "mlir/IR/Builders.h"
 #include "mlir/IR/BuiltinAttributes.h"
 #include "mlir/IR/BuiltinTypes.h"
@@ -22,6 +23,7 @@
 #include "mlir/Pass/Pass.h"
 #include "mlir/Transforms/DialectConversion.h"
 #include "llvm/ADT/PointerUnion.h"
+#include "llvm/ADT/SmallVector.h"
 #include "llvm/Support/Debug.h"
 #include "llvm/Support/LogicalResult.h"
 #include <cstdint>
@@ -87,8 +89,31 @@ public:
 };
 
 namespace {
-struct CombAndOpConversion : OpConversionPattern<AndOp> {
-  using OpConversionPattern<AndOp>::OpConversionPattern;
+
+template <typename T>
+struct ConversionPatternBase : public OpConversionPattern<T> {
+private:
+  using Super = OpConversionPattern<T>;
+
+public:
+  using OpConversionPattern<T>::OpConversionPattern;
+  template <typename S>
+  mlir::StringAttr getStr(S &&s) const {
+    return mlir::StringAttr::get(Super::getContext(), s);
+  }
+  mlir::IntegerAttr getInt(int32_t i) const {
+    return mlir::IntegerAttr::get(
+        mlir::IntegerType::get(Super::getContext(), 32), i);
+  }
+  template <typename S>
+  rtlil::ParameterAttr getParameter(S &&key, int32_t val) const {
+    return rtlil::ParameterAttr::get(Super::getContext(), getStr(key),
+                                     getInt(val));
+  }
+};
+
+struct CombAndOpConversion : ConversionPatternBase<AndOp> {
+  using ConversionPatternBase<AndOp>::ConversionPatternBase;
 
   LogicalResult
   matchAndRewrite(AndOp op, OpAdaptor adaptor,
@@ -102,13 +127,34 @@ struct CombAndOpConversion : OpConversionPattern<AndOp> {
         op->getResult(0));
     std::vector<Value> connections(
         {adaptor.getInputs()[0], adaptor.getInputs()[1], resultWire});
-    rewriter.create<rtlil::CellOp>(
-        op.getLoc(), "and", "$and", std::move(connections),
-        rewriter.getArrayAttr({}), rewriter.getArrayAttr({}));
+    mlir::Attribute portarr[3] = {getStr("\\A"), getStr("\\B"), getStr("\\Y")};
+    mlir::Attribute paramarr[] = {
+        getParameter("\\A_SIGNED", 0),
+        getParameter("\\A_WIDTH", cast<mlir::IntegerAttr>(
+                                      cast<rtlil::MValueType>(
+                                          adaptor.getInputs()[0].getType())
+                                          .getWidth())
+                                      .getInt()),
+        getParameter("\\B_SIGNED", 0),
+        getParameter("\\B_WIDTH", cast<mlir::IntegerAttr>(
+                                      cast<rtlil::MValueType>(
+                                          adaptor.getInputs()[1].getType())
+                                          .getWidth())
+                                      .getInt()),
+        getParameter(
+            "\\Y_WIDTH",
+            cast<mlir::IntegerAttr>(
+                cast<rtlil::MValueType>(resultWire.getType()).getWidth())
+                .getInt())};
+    mlir::ArrayAttr portnames = rewriter.getArrayAttr(portarr);
+    mlir::ArrayAttr params = rewriter.getArrayAttr(paramarr);
+    rewriter.create<rtlil::CellOp>(op.getLoc(), op->getName().getStringRef(),
+                                   "$and", std::move(connections), portnames,
+                                   params);
     rewriter.replaceOp(op, resultWire);
     return success();
   }
-};
+}; // namespace
 
 struct ModuleConversion : OpConversionPattern<hw::HWModuleOp> {
   using OpConversionPattern<hw::HWModuleOp>::OpConversionPattern;
@@ -127,7 +173,7 @@ struct ModuleConversion : OpConversionPattern<hw::HWModuleOp> {
           rewriter, op->getLoc(),
           getTypeConverter()->convertType(op.getInputTypes()[input]), {});
       auto wire = replacement.getDefiningOp<rtlil::WireOp>();
-      wire.setPortId(input);
+      rewriter.modifyOpInPlace(wire, [&]() { wire.setPortId(input); });
       converter.remapInput(input, replacement);
     }
     rewriter.applySignatureConversion(op.getBodyBlock(), converter,
@@ -140,11 +186,16 @@ struct ModuleConversion : OpConversionPattern<hw::HWModuleOp> {
 };
 } // namespace
 
-struct OutputConversion : OpConversionPattern<hw::OutputOp> {
-  using OpConversionPattern<hw::OutputOp>::OpConversionPattern;
+struct OutputConversion : ConversionPatternBase<hw::OutputOp> {
+  using ConversionPatternBase<hw::OutputOp>::ConversionPatternBase;
   LogicalResult
   matchAndRewrite(hw::OutputOp op, OpAdaptor adaptor,
                   ConversionPatternRewriter &rewriter) const override {
+    auto outputs = adaptor.getOutputs();
+    for (auto wire : outputs) {
+      auto op = wire.getDefiningOp<rtlil::WireOp>();
+      rewriter.modifyOpInPlace(op, [&] { op.setPortOutput(true); });
+    }
     rewriter.eraseOp(op);
     return success();
   }
