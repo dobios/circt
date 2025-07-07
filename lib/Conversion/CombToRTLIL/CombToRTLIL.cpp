@@ -21,13 +21,16 @@
 #include "mlir/IR/Types.h"
 #include "mlir/IR/ValueRange.h"
 #include "mlir/Pass/Pass.h"
+#include "mlir/Support/TypeID.h"
 #include "mlir/Transforms/DialectConversion.h"
 #include "llvm/ADT/PointerUnion.h"
 #include "llvm/ADT/SmallVector.h"
+#include "llvm/Support/Casting.h"
 #include "llvm/Support/Debug.h"
 #include "llvm/Support/LogicalResult.h"
 #include <cstdint>
 #include <optional>
+#include <unordered_map>
 
 namespace circt {
 #define GEN_PASS_DEF_CONVERTCOMBTORTLIL
@@ -95,8 +98,14 @@ struct ConversionPatternBase : public OpConversionPattern<T> {
 private:
   using Super = OpConversionPattern<T>;
 
+protected:
+  std::unordered_map<int, int> &portMap;
+
 public:
-  using OpConversionPattern<T>::OpConversionPattern;
+  ConversionPatternBase(const TypeConverter &typeConverter,
+                        std::unordered_map<int, int> &portMap,
+                        MLIRContext *context)
+      : Super(typeConverter, context), portMap(portMap) {}
   template <typename S>
   mlir::StringAttr getStr(S &&s) const {
     return mlir::StringAttr::get(Super::getContext(), s);
@@ -156,8 +165,8 @@ struct CombAndOpConversion : ConversionPatternBase<AndOp> {
   }
 }; // namespace
 
-struct ModuleConversion : OpConversionPattern<hw::HWModuleOp> {
-  using OpConversionPattern<hw::HWModuleOp>::OpConversionPattern;
+struct ModuleConversion : ConversionPatternBase<hw::HWModuleOp> {
+  using ConversionPatternBase<hw::HWModuleOp>::ConversionPatternBase;
   LogicalResult
   matchAndRewrite(hw::HWModuleOp op, OpAdaptor adaptor,
                   ConversionPatternRewriter &rewriter) const override {
@@ -173,8 +182,22 @@ struct ModuleConversion : OpConversionPattern<hw::HWModuleOp> {
           rewriter, op->getLoc(),
           getTypeConverter()->convertType(op.getInputTypes()[input]), {});
       auto wire = replacement.getDefiningOp<rtlil::WireOp>();
-      rewriter.modifyOpInPlace(wire, [&]() { wire.setPortId(input); });
+      rewriter.modifyOpInPlace(
+          wire, [&]() { wire.setPortId(op.getPortIdForInputId(input)); });
       converter.remapInput(input, replacement);
+    }
+    std::optional<hw::OutputOp> foundOp = std::nullopt;
+    for (auto it = op.getBodyBlock()->rbegin(); it != op.getBodyBlock()->rend();
+         ++it) {
+      auto outputOp = llvm::dyn_cast_or_null<hw::OutputOp>(*it);
+      if (outputOp) {
+        foundOp = outputOp;
+      }
+    }
+    if (foundOp) {
+      for (size_t output = 0; output < op.getNumOutputPorts(); output++) {
+        portMap.insert({output, op.getPortIdForOutputId(output)});
+      }
     }
     rewriter.applySignatureConversion(op.getBodyBlock(), converter,
                                       getTypeConverter());
@@ -192,9 +215,13 @@ struct OutputConversion : ConversionPatternBase<hw::OutputOp> {
   matchAndRewrite(hw::OutputOp op, OpAdaptor adaptor,
                   ConversionPatternRewriter &rewriter) const override {
     auto outputs = adaptor.getOutputs();
+    int i = 0;
     for (auto wire : outputs) {
       auto op = wire.getDefiningOp<rtlil::WireOp>();
-      rewriter.modifyOpInPlace(op, [&] { op.setPortOutput(true); });
+      rewriter.modifyOpInPlace(op, [&] {
+        op.setPortOutput(true);
+        op.setPortId(portMap[i++]);
+      });
     }
     rewriter.eraseOp(op);
     return success();
@@ -212,23 +239,25 @@ struct ConvertCombToRTLILPass
 };
 } // namespace
 
-static void populateCombToRTLILConversionPatterns(TypeConverter &converter,
-                                                  RewritePatternSet &patterns) {
+static void
+populateCombToRTLILConversionPatterns(TypeConverter &converter,
+                                      std::unordered_map<int, int> &portMap,
+                                      RewritePatternSet &patterns) {
   patterns.add<ModuleConversion, OutputConversion, CombAndOpConversion>(
-      converter, patterns.getContext());
+      converter, portMap, patterns.getContext());
 }
 
 void ConvertCombToRTLILPass::runOnOperation() {
   ConversionTarget target(getContext());
-
+  mlir::ConversionConfig config;
   target.addLegalDialect<rtlil::RTLILDialect>();
   target.addIllegalDialect<comb::CombDialect>();
   target.addLegalOp<mlir::ModuleOp>();
+  std::unordered_map<int, int> portMap;
 
   RewritePatternSet patterns(&getContext());
   RTLILTypeConverter converter;
-  populateCombToRTLILConversionPatterns(converter, patterns);
-
+  populateCombToRTLILConversionPatterns(converter, portMap, patterns);
   if (failed(mlir::applyPartialConversion(getOperation(), target,
                                           std::move(patterns)))) {
     return signalPassFailure();
