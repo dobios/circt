@@ -33,6 +33,8 @@ using namespace circt::rtlil;
 #include "circt/Dialect/RTLIL/RTLILOpsDialect.cpp.inc"
 #include "circt/Dialect/RTLIL/RTLILEnums.cpp.inc"
 
+#include "circt/Dialect/RTLIL/RTLILInterfaces.cpp.inc"
+
 #define GET_ATTRDEF_CLASSES
 #include "circt/Dialect/RTLIL/RTLILAttrDefs.cpp.inc"
 #undef GET_ATTRDEF_CLASSES

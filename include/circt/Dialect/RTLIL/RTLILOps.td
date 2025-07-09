@@ -111,7 +111,47 @@ def WireOp : RTLIL_Op<"wire"> {
   let results = (outs RTLILValue:$result);
 }
 
-def CellOp : RTLIL_Op<"cell"> {
+def CellOpInterface : OpInterface<"CellOpInterface"> {
+  let description = [{
+    All cell types implement this interface.
+  }];
+  let cppNamespace = "::circt::rtlil";
+  let methods = [
+    InterfaceMethod<[{
+      Gets the name of the cell op.
+    }], "::llvm::StringRef", "getCellName", (ins),
+    /*methodBody*/ "",
+    /*defaultImpl*/ [{
+      return $_op.getName();
+    }]>,
+    InterfaceMethod<[{
+      Gets the type of the cell op.
+    }], "::llvm::StringRef", "getCellType", (ins),
+    "", [{
+      return $_op.getType();
+    }]>,
+    InterfaceMethod<[{
+      Gets the connections of the cell op.
+    }], "::mlir::OperandRange", "getCellConnections", (ins),
+    "", [{
+      return $_op.getConnections();
+    }]>,
+    InterfaceMethod<[{
+      Gets the Ports of the cell op.
+    }], "::mlir::ArrayAttr", "getCellPorts", (ins),
+    "", [{
+      return $_op.getPorts();
+    }]>,
+    InterfaceMethod<[{
+      Gets the parameters of the cell op.
+    }], "::mlir::ArrayAttr", "getCellParameters", (ins),
+    "", [{
+      return $_op.getParametersAttr();
+    }]>
+  ];
+}
+
+def CellOp : RTLIL_Op<"cell", [DeclareOpInterfaceMethods<CellOpInterface>]> {
   let arguments = (ins StrAttr:$name
                        ,StrAttr:$type
                        ,Variadic<RTLILValue>:$connections
