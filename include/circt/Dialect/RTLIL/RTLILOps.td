@@ -160,6 +160,15 @@ def CellOp : RTLIL_Op<"cell", [DeclareOpInterfaceMethods<CellOpInterface>]> {
   );
 }
 
+def IntanceOp : RTLIL_Op<"instance", [DeclareOpInterfaceMethods<CellOpInterface>]> {
+  let arguments = (ins StrAttr:$name,
+                       FlatSymbolRefAttr:$type,
+                       Variadic<RTLILValue>:$connections,
+                       TypedArrayAttrBase<StrAttr, "port names">:$ports,
+                       ParametersAttr:$parameters
+  );
+}
+
 def WConnectionOp : RTLIL_Op<"wconnection"> {
   let arguments = (ins RTLILValue:$lhs, RTLILValue:$rhs);
 }
