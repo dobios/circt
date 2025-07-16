@@ -12,6 +12,7 @@ add_circt_dialect_library(CIRCTRTLIL
         MLIRRTLILEnumDefsIncGen
         MLIRRTLILTypesIncGen
         MLIRRTLILInterfaceDefsIncGen
+        MLIRDerivedAttributeOpInterface
 
 	LINK_LIBS PUBLIC
 	MLIRIR

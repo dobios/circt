@@ -6,6 +6,9 @@
 
 namespace circt::rtlil {
 bool isMValueType(mlir::Type type);
-}; // namespace rtlil
+mlir::ArrayAttr createParamsAttr(
+    mlir::MLIRContext *context,
+    llvm::ArrayRef<std::tuple<llvm::StringRef, unsigned, uint64_t>> &&r);
+}; // namespace circt::rtlil
 
 #endif

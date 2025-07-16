@@ -23,6 +23,7 @@
 #include "mlir/IR/BuiltinTypes.h"
 #include "mlir/IR/Dialect.h"
 #include "mlir/Interfaces/SideEffectInterfaces.h"
+#include "mlir/Interfaces/DerivedAttributeOpInterface.h"
 
 #include "circt/Dialect/RTLIL/RTLILInterfaces.h.inc"
 #define GET_TYPEDEF_CLASSES

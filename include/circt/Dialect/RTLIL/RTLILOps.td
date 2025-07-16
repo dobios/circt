@@ -51,10 +51,19 @@ def ParamAttr : RTLIL_Attr<"Parameter", "param"> {
                     "::mlir::StringAttr":$name,
                     "::mlir::IntegerAttr":$value);
   let assemblyFormat = "$name $value ";
+  let builders = [
+    AttrBuilder<(ins "llvm::StringRef":$name, "unsigned":$width,"uint64_t":$val), [{
+      auto intattr = mlir::IntegerAttr::get(mlir::IntegerType::get($_ctxt, width), val);
+      auto strattr = mlir::StringAttr::get($_ctxt, name);
+      return Base::get($_ctxt, strattr, intattr);
+    }]>
+  ];
 }
 
 def ParametersAttr
-  : TypedArrayAttrBase<ParamAttr, "cell parameters">;
+  : TypedArrayAttrBase<ParamAttr, "cell parameters"> {
+  let constBuilderCall = "::circt::rtlil::createParamsAttr($_builder.getContext(), $0)";
+}
 
 // Connectivity
 
@@ -146,7 +155,7 @@ def CellOpInterface : OpInterface<"CellOpInterface"> {
       Gets the parameters of the cell op.
     }], "::mlir::ArrayAttr", "getCellParameters", (ins),
     "", [{
-      return $_op.getParametersAttr();
+      return $_op.getParameters();
     }]>
   ];
 }
@@ -155,16 +164,30 @@ def CellOp : RTLIL_Op<"cell", [DeclareOpInterfaceMethods<CellOpInterface>]> {
   let arguments = (ins StrAttr:$name
                        ,StrAttr:$type
                        ,Variadic<RTLILValue>:$connections
-                       ,TypedArrayAttrBase<StrAttr, "port names">:$ports
+                       ,StrArrayAttr:$ports
                        ,ParametersAttr:$parameters
   );
+}
+
+def DFFOp : RTLIL_Op<"dff", [DeclareOpInterfaceMethods<CellOpInterface>, AllMatch<["getNumOperands()", "3"], "has three connections">]> {
+  let arguments = (ins StrAttr:$name,
+                      Variadic<RTLILValue>:$connections,
+                      I32Attr:$width,
+                      DefaultValuedAttr<StrAttr, [{"$$dff"}]>:$type,
+                      DefaultValuedAttr<StrArrayAttr, [{ {"\\CLK", "\\D", "\\Q"} }]>:$ports);
+  DerivedAttr parameters = DerivedAttr<"::mlir::ArrayAttr", [{
+                        return ::circt::rtlil::createParamsAttr(getContext(), {
+                          {"\\WIDTH", 32, getWidth()},
+                          {"\\CLK_POLARITY", 1, 1}
+                        });
+                      }], "getParameters()">;
 }
 
 def IntanceOp : RTLIL_Op<"instance", [DeclareOpInterfaceMethods<CellOpInterface>]> {
   let arguments = (ins StrAttr:$name,
                        FlatSymbolRefAttr:$type,
                        Variadic<RTLILValue>:$connections,
-                       TypedArrayAttrBase<StrAttr, "port names">:$ports,
+                       StrArrayAttr:$ports,
                        ParametersAttr:$parameters
   );
 }
