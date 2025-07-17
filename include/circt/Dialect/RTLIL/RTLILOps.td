@@ -169,16 +169,39 @@ def CellOp : RTLIL_Op<"cell", [DeclareOpInterfaceMethods<CellOpInterface>]> {
   );
 }
 
-def DFFOp : RTLIL_Op<"dff", [DeclareOpInterfaceMethods<CellOpInterface>, AllMatch<["getNumOperands()", "3"], "has three connections">]> {
+class FixedOperands<int n> : AllMatch<["getNumOperands()", "" # n], "has " # n # " connections">;
+class MValueExpander  {
+  string typeName = MValueTypeImpl.cppType;
+}
+
+class FixedWidths<list<string> widths> : MValueExpander, TraitList<!foreach(idx, !range(widths), AllMatch<["::llvm::cast<::mlir::IntegerAttr>(::llvm::cast<"# typeName #">(getOperand(" # idx # ").getType()).getWidth()).getInt()", "" # widths[idx]], "input " # idx # " width is " # widths[idx]>)>;
+
+def DFFOp : RTLIL_Op<"dff", [DeclareOpInterfaceMethods<CellOpInterface>, FixedOperands<3>, FixedWidths<["1", "$width", "$width"]>]> {
   let arguments = (ins StrAttr:$name,
                       Variadic<RTLILValue>:$connections,
                       I32Attr:$width,
                       DefaultValuedAttr<StrAttr, [{"$$dff"}]>:$type,
                       DefaultValuedAttr<StrArrayAttr, [{ {"\\CLK", "\\D", "\\Q"} }]>:$ports);
+  string abcname = MValueTypeImpl.cppType;
   DerivedAttr parameters = DerivedAttr<"::mlir::ArrayAttr", [{
                         return ::circt::rtlil::createParamsAttr(getContext(), {
                           {"\\WIDTH", 32, getWidth()},
                           {"\\CLK_POLARITY", 1, 1}
+                        });
+                      }], "getParameters()">;
+}
+
+def ALDFFOp : RTLIL_Op<"aldff", [DeclareOpInterfaceMethods<CellOpInterface>, FixedOperands<5>, FixedWidths<["1", "$width", "1", "$width", "$width"]>]> {
+  let arguments = (ins StrAttr:$name,
+                      Variadic<RTLILValue>:$connections,
+                      I32Attr:$width,
+                      DefaultValuedAttr<StrAttr, [{"$$aldff"}]>:$type,
+                      DefaultValuedAttr<StrArrayAttr, [{ {"\\CLK", "\\D", "\\ALOAD", "\\AD", "\\Q"} }]>:$ports);
+  DerivedAttr parameters = DerivedAttr<"::mlir::ArrayAttr", [{
+                        return ::circt::rtlil::createParamsAttr(getContext(), {
+                          {"\\WIDTH", 32, getWidth()},
+                          {"\\CLK_POLARITY", 1, 1},
+                          {"\\ALOAD_POLARITY", 1, 1},
                         });
                       }], "getParameters()">;
 }

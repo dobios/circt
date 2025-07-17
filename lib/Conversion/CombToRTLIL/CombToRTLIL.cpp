@@ -193,24 +193,11 @@ struct CombRegOpResetConversion : ConversionPatternBase<seq::CompRegOp> {
     rewriter.modifyOpInPlace(resultWire, [&] {
       resultWire.setNameAttr(asOperand(rewriter, op->getResult(0)));
     });
-    std::vector<Value> connections(
-        {adaptor.getClk(), adaptor.getInput(), adaptor.getReset(), resultWire});
-    mlir::Attribute portarr[] = {getStr("\\CLK"), getStr("\\D"),
-                                 getStr("\\ARST"), getStr("\\Q")};
-    mlir::Attribute paramarr[] = {
-        getParameter("\\WIDTH", resultWire.getWidth()),
-        getParameter("\\CLK_POLARITY",
-                     rewriter.getIntegerAttr(rewriter.getIntegerType(1), 1)),
-        getParameter("\\ARST_POLARITY",
-                     rewriter.getIntegerAttr(rewriter.getIntegerType(1), 1)),
-        getParameter("\\ARST_VALUE", cast<mlir::IntegerAttr>(
-                                         cast<rtlil::MValueType>(
-                                             adaptor.getResetValue().getType())
-                                             .getWidth())
-                                         .getInt())};
-    rewriter.create<rtlil::CellOp>(
-        op->getLoc(), name, "$adff", std::move(connections),
-        rewriter.getArrayAttr(portarr), rewriter.getArrayAttr(paramarr));
+    std::vector<Value> connections({adaptor.getClk(), adaptor.getInput(),
+                                    adaptor.getReset(), adaptor.getResetValue(),
+                                    resultWire});
+    rewriter.create<rtlil::ALDFFOp>(op->getLoc(), name, std::move(connections),
+                                    resultWire.getWidth());
     rewriter.replaceOp(op, resultWire);
     return success();
   }
@@ -365,8 +352,13 @@ struct InstanceConversion : ConversionPatternBase<hw::InstanceOp> {
   LogicalResult
   matchAndRewrite(hw::InstanceOp op, OpAdaptor adaptor,
                   ConversionPatternRewriter &rewriter) const override {
-    mlir::ArrayAttr ports = rewriter.getArrayAttr({});
-    mlir::ArrayAttr props = rewriter.getArrayAttr({});
+    llvm::SmallVector<mlir::Attribute> ports;
+    for (auto &in : op.getArgNames()) {
+      ports.emplace_back(makeGlobal(rewriter, cast<mlir::StringAttr>(in)));
+    }
+    for (auto &out : op.getResultNames()) {
+      ports.emplace_back(makeGlobal(rewriter, cast<mlir::StringAttr>(out)));
+    }
     llvm::SmallVector<Value> resultWires(adaptor.getInputs());
     for (auto res : op->getResults()) {
       auto type = getTypeConverter()->convertType(res.getType());
@@ -376,8 +368,8 @@ struct InstanceConversion : ConversionPatternBase<hw::InstanceOp> {
     }
     rewriter.create<rtlil::IntanceOp>(
         op->getLoc(), makeGlobal(rewriter, op.getInstanceNameAttr()),
-        makeGlobal(rewriter, op.getModuleNameAttr()), resultWires, ports,
-        props);
+        makeGlobal(rewriter, op.getModuleName()), resultWires,
+        rewriter.getArrayAttr(ports), rewriter.getArrayAttr({}));
     resultWires.erase(resultWires.begin(),
                       resultWires.begin() + op.getNumInputPorts());
     rewriter.replaceOp(op, mlir::ValueRange(resultWires));
