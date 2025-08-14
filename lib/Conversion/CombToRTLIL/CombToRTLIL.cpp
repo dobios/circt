@@ -172,7 +172,7 @@ public:
   }
 };
 
-struct CombRegOpResetConversion : ConversionPatternBase<seq::CompRegOp> {
+struct CompRegOpResetConversion : ConversionPatternBase<seq::CompRegOp> {
   using ConversionPatternBase<seq::CompRegOp>::ConversionPatternBase;
 
   LogicalResult
@@ -203,7 +203,7 @@ struct CombRegOpResetConversion : ConversionPatternBase<seq::CompRegOp> {
   }
 };
 
-struct CombRegOpConversion : ConversionPatternBase<seq::CompRegOp> {
+struct CompRegOpConversion : ConversionPatternBase<seq::CompRegOp> {
   using ConversionPatternBase<seq::CompRegOp>::ConversionPatternBase;
 
   LogicalResult
@@ -394,7 +394,7 @@ static void populateCombToRTLILConversionPatterns(TypeConverter &converter,
                                                   RewritePatternSet &patterns) {
   patterns
       .add<ModuleConversion, OutputConversion, CombAndOpConversion,
-           InstanceConversion, CombRegOpResetConversion, CombRegOpConversion>(
+           InstanceConversion, CompRegOpResetConversion, CompRegOpConversion>(
           converter, portMap, patterns.getContext());
 }
 

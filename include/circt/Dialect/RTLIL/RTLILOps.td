@@ -182,7 +182,6 @@ def DFFOp : RTLIL_Op<"dff", [DeclareOpInterfaceMethods<CellOpInterface>, FixedOp
                       I32Attr:$width,
                       DefaultValuedAttr<StrAttr, [{"$$dff"}]>:$type,
                       DefaultValuedAttr<StrArrayAttr, [{ {"\\CLK", "\\D", "\\Q"} }]>:$ports);
-  string abcname = MValueTypeImpl.cppType;
   DerivedAttr parameters = DerivedAttr<"::mlir::ArrayAttr", [{
                         return ::circt::rtlil::createParamsAttr(getContext(), {
                           {"\\WIDTH", 32, getWidth()},
