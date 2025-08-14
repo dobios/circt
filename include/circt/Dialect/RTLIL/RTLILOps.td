@@ -185,7 +185,7 @@ def DFFOp : RTLIL_Op<"dff", [DeclareOpInterfaceMethods<CellOpInterface>, FixedOp
   DerivedAttr parameters = DerivedAttr<"::mlir::ArrayAttr", [{
                         return ::circt::rtlil::createParamsAttr(getContext(), {
                           {"\\WIDTH", 32, getWidth()},
-                          {"\\CLK_POLARITY", 1, 1}
+                          {"\\CLK_POLARITY", 32, 1}
                         });
                       }], "getParameters()">;
 }
@@ -199,8 +199,8 @@ def ALDFFOp : RTLIL_Op<"aldff", [DeclareOpInterfaceMethods<CellOpInterface>, Fix
   DerivedAttr parameters = DerivedAttr<"::mlir::ArrayAttr", [{
                         return ::circt::rtlil::createParamsAttr(getContext(), {
                           {"\\WIDTH", 32, getWidth()},
-                          {"\\CLK_POLARITY", 1, 1},
-                          {"\\ALOAD_POLARITY", 1, 1},
+                          {"\\CLK_POLARITY", 32, 1},
+                          {"\\ALOAD_POLARITY", 32, 1},
                         });
                       }], "getParameters()">;
 }

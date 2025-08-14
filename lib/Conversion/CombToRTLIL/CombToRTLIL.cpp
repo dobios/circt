@@ -53,6 +53,16 @@ namespace circt {
 using namespace circt;
 using namespace comb;
 
+inline static std::string asOperandRaw(const Value v) {
+  std::string result;
+  llvm::raw_string_ostream os(result);
+  v.printAsOperand(os, {});
+  return result;
+}
+
+// TODO proper scoping mechanism for symbols --> global rtlil names
+// likely symbol table walk with prefixes
+
 //===----------------------------------------------------------------------===//
 // Conversion patterns
 //===----------------------------------------------------------------------===//
@@ -100,8 +110,8 @@ class RTLILTypeConverter : public mlir::TypeConverter {
     }
     mlir::StringAttr name = builder.getStringAttr("undefined");
     if (!isInput) {
-      auto opname = vals[0].getDefiningOp()->getName().getStringRef();
-      name = builder.getStringAttr(llvm::formatv("${0}_wire", opname));
+      name =
+          builder.getStringAttr(llvm::formatv("${0}", asOperandRaw(vals[0])));
     }
     return builder.create<rtlil::WireOp>(
         pos, t, name, cast<mlir::IntegerAttr>(t.getWidth()).getInt(), 0, 0,
@@ -159,16 +169,19 @@ public:
     return r.getStringAttr(res);
   }
   template <typename S>
+  mlir::StringAttr makePortName(mlir::ConversionPatternRewriter &r,
+                                S moduleName, S portname) const {
+    auto res = llvm::formatv("\\{0}_{1}", moduleName, portname);
+    return r.getStringAttr(res);
+  }
+  template <typename S>
   mlir::StringAttr makeLocal(mlir::ConversionPatternRewriter &r, S s) const {
     auto res = llvm::formatv("${0}", s);
     return r.getStringAttr(res);
   }
   mlir::StringAttr asOperand(mlir::ConversionPatternRewriter &r,
                              Value v) const {
-    std::string result;
-    llvm::raw_string_ostream os(result);
-    v.printAsOperand(os, {});
-    return r.getStringAttr(result);
+    return r.getStringAttr(asOperandRaw(v));
   }
 };
 
@@ -188,10 +201,11 @@ struct CompRegOpResetConversion : ConversionPatternBase<seq::CompRegOp> {
                                           op.getData())
             .getDefiningOp<rtlil::WireOp>();
     auto name = op.getInnerSym()
-                    ? makeGlobal(rewriter, op.getInnerSymAttrName())
+                    ? makeGlobal(rewriter, op.getInnerSymAttr().getSymName())
                     : makeLocal(rewriter, op.getNameAttr());
     rewriter.modifyOpInPlace(resultWire, [&] {
-      resultWire.setNameAttr(asOperand(rewriter, op->getResult(0)));
+      resultWire.setNameAttr(
+          makeLocal(rewriter, asOperand(rewriter, op->getResult(0))));
     });
     std::vector<Value> connections({adaptor.getClk(), adaptor.getInput(),
                                     adaptor.getReset(), adaptor.getResetValue(),
@@ -219,10 +233,11 @@ struct CompRegOpConversion : ConversionPatternBase<seq::CompRegOp> {
                                           op.getData())
             .getDefiningOp<rtlil::WireOp>();
     auto name = op.getInnerSym()
-                    ? makeGlobal(rewriter, op.getInnerSymAttrName())
+                    ? makeGlobal(rewriter, op.getInnerSymAttr().getSymName()) // this should be prefixed by the module probably
                     : makeLocal(rewriter, op.getNameAttr());
     rewriter.modifyOpInPlace(resultWire, [&] {
-      resultWire.setNameAttr(asOperand(rewriter, op->getResult(0)));
+      resultWire.setNameAttr(
+          makeLocal(rewriter, asOperand(rewriter, op->getResult(0))));
     });
     std::vector<Value> connections(
         {adaptor.getClk(), adaptor.getInput(), resultWire});
@@ -285,6 +300,7 @@ struct ModuleConversion : ConversionPatternBase<hw::HWModuleOp> {
     if (!op.getBody().hasOneBlock()) {
       return failure();
     }
+    portMap.clear();
     auto result = rewriter.create<mlir::ModuleOp>(
         op.getLoc(), makeGlobal(rewriter, op.getSymName()));
     mlir::TypeConverter::SignatureConversion converter(op.getNumInputPorts());
@@ -296,8 +312,9 @@ struct ModuleConversion : ConversionPatternBase<hw::HWModuleOp> {
       auto wire = replacement.getDefiningOp<rtlil::WireOp>();
       rewriter.modifyOpInPlace(wire, [&]() {
         wire.setPortId(op.getPortIdForInputId(input));
-        wire.setName(makeGlobal(rewriter,
-                                op.getPortName(op.getPortIdForInputId(input))));
+        wire.setName(
+            makePortName(rewriter, op.getSymName(),
+                         op.getPortName(op.getPortIdForInputId(input))));
       });
       converter.remapInput(input, replacement);
     }
@@ -311,10 +328,14 @@ struct ModuleConversion : ConversionPatternBase<hw::HWModuleOp> {
     }
     if (foundOp) {
       for (size_t output = 0; output < op.getNumOutputPorts(); output++) {
-        portMap.insert(
-            {output, std::pair(op.getPortIdForOutputId(output),
-                               rewriter.getStringAttr(op.getPortName(
-                                   op.getPortIdForOutputId(output))))});
+        auto [_, inserted] = portMap.insert(
+            {output,
+             std::pair(op.getPortIdForOutputId(output),
+                       makePortName(
+                           rewriter, op.getSymName(),
+                           op.getPortName(op.getPortIdForOutputId(output))))});
+        if (!inserted)
+          return failure();
       }
     }
     rewriter.applySignatureConversion(op.getBodyBlock(), converter,
@@ -339,7 +360,7 @@ struct OutputConversion : ConversionPatternBase<hw::OutputOp> {
       rewriter.modifyOpInPlace(op, [&] {
         op.setPortOutput(true);
         op.setPortId(portMap[i].first);
-        op.setName(makeGlobal(rewriter, portMap[i++].second));
+        op.setName(portMap[i++].second);
       });
     }
     rewriter.eraseOp(op);
@@ -354,10 +375,12 @@ struct InstanceConversion : ConversionPatternBase<hw::InstanceOp> {
                   ConversionPatternRewriter &rewriter) const override {
     llvm::SmallVector<mlir::Attribute> ports;
     for (auto &in : op.getArgNames()) {
-      ports.emplace_back(makeGlobal(rewriter, cast<mlir::StringAttr>(in)));
+      ports.emplace_back(makePortName(rewriter, op.getModuleName(),
+                                      cast<mlir::StringAttr>(in).strref()));
     }
     for (auto &out : op.getResultNames()) {
-      ports.emplace_back(makeGlobal(rewriter, cast<mlir::StringAttr>(out)));
+      ports.emplace_back(makePortName(rewriter, op.getModuleName(),
+                                      cast<mlir::StringAttr>(out).strref()));
     }
     llvm::SmallVector<Value> resultWires(adaptor.getInputs());
     for (auto res : op->getResults()) {
