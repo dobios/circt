@@ -1,8 +1,5 @@
-add_circt_conversion_library(CIRCTCombToRTLIL
-  CombToRTLIL.cpp
-
-  DEPENDS
-  CIRCTConversionPassIncGen
+add_circt_conversion_library(CIRCTRTLILCommon
+  RTLILCommon.cpp
 
   LINK_COMPONENTS
   Core
@@ -11,8 +8,8 @@ add_circt_conversion_library(CIRCTCombToRTLIL
   CIRCTHW
   CIRCTComb
   CIRCTRTLIL
-  CIRCTRTLILCommon
   MLIRTransforms
   MLIRPass
   MLIRSupport
 )
+

@@ -36,6 +36,4 @@
 #include "circt/Dialect/RTLIL/RTLILOpsDialect.h.inc"
 #include "circt/Dialect/RTLIL/RTLILTypesGen.h.inc"
 
-#include "circt/Dialect/RTLIL/RTLILTypes.h"
-
 #endif // RTLIL_RTLILDIALECT_H
