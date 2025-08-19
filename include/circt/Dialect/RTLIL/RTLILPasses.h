@@ -15,16 +15,11 @@
 // specific language governing permissions and limitations
 // under the License.
 
-#ifndef MLIR_RTLIL_PASSES_H
-#define MLIR_RTLIL_PASSES_H
+#ifndef CIRCT_DIALECT_RTLIL_RTLILPASSES_H
+#define CIRCT_DIALECT_RTLIL_RTLILPASSES_H
 
 #include <memory>
 
 #include "mlir/Pass/Pass.h"
 
-namespace circt::rtlil {
-// std::unique_ptr<mlir::Pass> createLowerToAffinePass();
-// std::unique_ptr<mlir::Pass> createLowerToLLVMPass();
-} // namespace rtlil
-
-#endif // MLIR_RTLIL_PASSES_H
+#endif

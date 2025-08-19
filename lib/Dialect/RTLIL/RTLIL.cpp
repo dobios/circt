@@ -16,8 +16,8 @@
 // under the License.
 
 #include "mlir/IR/Builders.h"
-#include "mlir/IR/OpImplementation.h"
 #include "mlir/IR/DialectImplementation.h"
+#include "mlir/IR/OpImplementation.h"
 #include "llvm/ADT/TypeSwitch.h"
 
 #include "circt/Dialect/RTLIL/RTLIL.h"
@@ -30,8 +30,8 @@ using namespace circt::rtlil;
 // RTLIL dialect.
 //===----------------------------------------------------------------------===//
 
-#include "circt/Dialect/RTLIL/RTLILOpsDialect.cpp.inc"
 #include "circt/Dialect/RTLIL/RTLILEnums.cpp.inc"
+#include "circt/Dialect/RTLIL/RTLILOpsDialect.cpp.inc"
 
 #include "circt/Dialect/RTLIL/RTLILInterfaces.cpp.inc"
 
@@ -51,9 +51,9 @@ void RTLILDialect::initialize() {
   addAttributes<
 #define GET_ATTRDEF_LIST
 #include "circt/Dialect/RTLIL/RTLILAttrDefs.cpp.inc"
-    >();
+      >();
   addTypes<
 #define GET_TYPEDEF_LIST
 #include "circt/Dialect/RTLIL/RTLILOpsTypes.cpp.inc"
-    >();
+      >();
 }

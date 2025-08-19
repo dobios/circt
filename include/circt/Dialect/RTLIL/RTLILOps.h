@@ -15,8 +15,8 @@
 // specific language governing permissions and limitations
 // under the License.
 
-#ifndef RTLIL_RTLILOPS_H
-#define RTLIL_RTLILOPS_H
+#ifndef CIRCT_DIALECT_RTLIL_RTLILOPS_H
+#define CIRCT_DIALECT_RTLIL_RTLILOPS_H
 
 #include "mlir/Bytecode/BytecodeOpInterface.h"
 #include "mlir/IR/BuiltinTypes.h"

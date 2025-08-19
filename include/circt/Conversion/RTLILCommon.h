@@ -1,7 +1,8 @@
-#ifndef RTLIL_RTLILSUPPORT_H
-#define RTLIL_RTLILSUPPORT_H
+#ifndef CIRCT_CONVERSION_RTLILCOMMON_H
+#define CIRCT_CONVERSION_RTLILCOMMON_H
 
 #include "circt/Dialect/HW/HWTypes.h"
+#include "circt/Dialect/RTLIL/RTLIL.h"
 #include "circt/Dialect/RTLIL/RTLILTypes.h"
 #include "circt/Dialect/Seq/SeqTypes.h"
 #include "mlir/IR/Operation.h"

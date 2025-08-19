@@ -1,8 +1,8 @@
-#ifndef RTLIL_RTLILTYPES_H
-#define RTLIL_RTLILTYPES_H
+#ifndef CIRCT_DIALECT_RTLIL_RTLILTYPES_H
+#define CIRCT_DIALECT_RTLIL_RTLILTYPES_H
 
-#include "mlir/TableGen/Type.h"
 #include "RTLIL.h"
+#include "mlir/TableGen/Type.h"
 
 namespace circt::rtlil {
 bool isMValueType(mlir::Type type);

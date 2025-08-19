@@ -1,10 +1,8 @@
 #include "circt/Dialect/RTLIL/RTLILTypes.h"
 #include "circt/Dialect/RTLIL/RTLIL.h"
-#include "circt/Dialect/RTLIL/RTLILOps.h"
 #include "mlir/IR/Attributes.h"
 #include "mlir/IR/BuiltinAttributes.h"
 #include "mlir/IR/MLIRContext.h"
-#include "mlir/IR/OpImplementation.h"
 #include "llvm/ADT/ArrayRef.h"
 #include "llvm/ADT/SmallVector.h"
 #include "llvm/ADT/StringRef.h"
@@ -13,11 +11,7 @@
 using namespace mlir;
 
 namespace circt::rtlil {
-bool isMValueType(mlir::Type type) {
-  if (isa<MValueType>(type))
-    return true;
-  return false;
-}
+bool isMValueType(mlir::Type type) { return isa<MValueType>(type); }
 
 ArrayAttr createParamsAttr(
     mlir::MLIRContext *context,

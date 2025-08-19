@@ -15,15 +15,15 @@
 // specific language governing permissions and limitations
 // under the License.
 
-#ifndef RTLIL_RTLILDIALECT_H
-#define RTLIL_RTLILDIALECT_H
+#ifndef CIRCT_DIALECT_RTLIL_RTLIL_H
+#define CIRCT_DIALECT_RTLIL_RTLIL_H
 
 #include "mlir/IR/BuiltinDialect.h"
 #include "mlir/IR/BuiltinOps.h"
 #include "mlir/IR/BuiltinTypes.h"
 #include "mlir/IR/Dialect.h"
-#include "mlir/Interfaces/SideEffectInterfaces.h"
 #include "mlir/Interfaces/DerivedAttributeOpInterface.h"
+#include "mlir/Interfaces/SideEffectInterfaces.h"
 
 #include "circt/Dialect/RTLIL/RTLILInterfaces.h.inc"
 #define GET_TYPEDEF_CLASSES
@@ -36,4 +36,4 @@
 #include "circt/Dialect/RTLIL/RTLILOpsDialect.h.inc"
 #include "circt/Dialect/RTLIL/RTLILTypesGen.h.inc"
 
-#endif // RTLIL_RTLILDIALECT_H
+#endif // CIRCT_DIALECT_RTLIL_RTLIL_H

@@ -11,5 +11,4 @@ namespace circt {
 #include "circt/Conversion/Passes.h.inc"
 
 } // namespace circt
-#endif // CIRCT_CONVERSION_COMBTOLLVM_COMBTOLLVM_H
-
+#endif
