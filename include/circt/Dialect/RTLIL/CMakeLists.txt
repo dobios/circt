@@ -15,11 +15,6 @@ mlir_tablegen(RTLILEnums.cpp.inc -gen-enum-defs)
 add_public_tablegen_target(MLIRRTLILEnumDefsIncGen)
 
 set(LLVM_TARGET_DEFINITIONS RTLILOps.td)
-mlir_tablegen(RTLILTypesGen.h.inc -gen-typedef-decls -typedefs-dialect=rtlil)
-mlir_tablegen(RTLILTypesGen.cpp.inc -gen-typedef-defs -typedefs-dialect=rtlil)
-add_public_tablegen_target(MLIRRTLILTypesIncGen)
-
-set(LLVM_TARGET_DEFINITIONS RTLILOps.td)
 mlir_tablegen(RTLILInterfaces.h.inc -gen-op-interface-decls)
 mlir_tablegen(RTLILInterfaces.cpp.inc -gen-op-interface-defs)
 add_public_tablegen_target(MLIRRTLILInterfaceDefsIncGen)

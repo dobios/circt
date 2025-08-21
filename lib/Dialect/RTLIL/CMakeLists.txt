@@ -10,7 +10,6 @@ add_circt_dialect_library(CIRCTRTLIL
     MLIRRTLILOpsIncGen
     MLIRRTLILAttrDefsIncGen
     MLIRRTLILEnumDefsIncGen
-    MLIRRTLILTypesIncGen
     MLIRRTLILInterfaceDefsIncGen
     MLIRDerivedAttributeOpInterface
 

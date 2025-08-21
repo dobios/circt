@@ -34,6 +34,5 @@
 #define GET_OP_CLASSES
 #include "circt/Dialect/RTLIL/RTLILOps.h.inc"
 #include "circt/Dialect/RTLIL/RTLILOpsDialect.h.inc"
-#include "circt/Dialect/RTLIL/RTLILTypesGen.h.inc"
 
 #endif // CIRCT_DIALECT_RTLIL_RTLIL_H
