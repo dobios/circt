@@ -129,6 +129,97 @@ struct CompRegOpConversion : ConversionPatternBase<seq::CompRegOp> {
   }
 };
 
+struct FirRegOpConversion : ConversionPatternBase<seq::FirRegOp> {
+  using ConversionPatternBase<seq::FirRegOp>::ConversionPatternBase;
+
+  LogicalResult
+  matchAndRewrite(seq::FirRegOp op, OpAdaptor adaptor,
+                  mlir::ConversionPatternRewriter &rewriter) const override {
+    if (op.getReset() || op.getPreset()) {
+      return failure();
+    }
+    auto resultType = getTypeConverter()->convertType(op.getData().getType());
+    rtlil::WireOp resultWire =
+        getTypeConverter()
+            ->materializeTargetConversion(rewriter, op->getLoc(), resultType,
+                                          op.getData())
+            .getDefiningOp<rtlil::WireOp>();
+    auto name = op.getInnerSym()
+                    ? makeGlobal(rewriter, op.getInnerSymAttr().getSymName(),
+                                 op->getLoc()) // this should be prefixed
+                                               // by the module probably
+                    : genLocal(rewriter);
+    rewriter.modifyOpInPlace(
+        resultWire, [&] { resultWire.setNameAttr(genLocal(rewriter)); });
+    std::vector<Value> connections(
+        {adaptor.getClk(), adaptor.getNext(), resultWire});
+    rewriter.create<rtlil::DFFOp>(op.getLoc(), name, std::move(connections),
+                                  resultWire.getWidth());
+    rewriter.replaceOp(op, resultWire);
+    return success();
+  }
+};
+
+struct FirRegOpResetConversion : ConversionPatternBase<seq::FirRegOp> {
+  using ConversionPatternBase<seq::FirRegOp>::ConversionPatternBase;
+
+  LogicalResult
+  matchAndRewrite(seq::FirRegOp op, OpAdaptor adaptor,
+                  mlir::ConversionPatternRewriter &rewriter) const override {
+    if (!op.getReset() || op.getPreset()) {
+      return failure();
+    }
+    auto resultType = getTypeConverter()->convertType(op.getData().getType());
+    rtlil::WireOp resultWire =
+        getTypeConverter()
+            ->materializeTargetConversion(rewriter, op->getLoc(), resultType,
+                                          op.getData())
+            .getDefiningOp<rtlil::WireOp>();
+    auto name = op.getInnerSym()
+                    ? makeGlobal(rewriter, op.getInnerSymAttr().getSymName(),
+                                 op->getLoc())
+                    : genLocal(rewriter);
+    rewriter.modifyOpInPlace(
+        resultWire, [&] { resultWire.setNameAttr(genLocal(rewriter)); });
+    std::vector<Value> connections({adaptor.getClk(), adaptor.getNext(),
+                                    adaptor.getReset(), adaptor.getResetValue(),
+                                    resultWire});
+    if (op.getIsAsync()) {
+      rewriter.create<rtlil::ALDFFOp>(
+          op->getLoc(), name, std::move(connections), resultWire.getWidth());
+    } else {
+      auto temptype = adaptor.getReset().getType();
+      if (!temptype) {
+        return failure();
+      }
+      rtlil::WireOp bufferedResetWire =
+          getTypeConverter()
+              ->materializeTargetConversion(rewriter, op->getLoc(), temptype,
+                                            adaptor.getReset())
+              .getDefiningOp<rtlil::WireOp>();
+      {
+        auto syncedResetWire = getTypeConverter()->materializeTargetConversion(
+            rewriter, op->getLoc(), temptype, adaptor.getReset());
+        Value connections[3] = {adaptor.getClk(), adaptor.getReset(),
+                                syncedResetWire};
+        rewriter.create<rtlil::DFFOp>(op.getLoc(), genLocal(rewriter),
+                                      connections, resultWire.getWidth());
+        Value connections2[3] = {syncedResetWire, adaptor.getReset(),
+                                 bufferedResetWire};
+        rewriter.create<rtlil::AndOp>(op->getLoc(), genLocal(rewriter),
+                                      connections2, 1, false);
+      }
+      std::vector<Value> connections({adaptor.getClk(), adaptor.getNext(),
+                                      bufferedResetWire,
+                                      adaptor.getResetValue(), resultWire});
+      rewriter.create<rtlil::ALDFFOp>(
+          op->getLoc(), name, std::move(connections), resultWire.getWidth());
+    }
+    rewriter.replaceOp(op, resultWire);
+    return success();
+  }
+};
+
 struct CombAndOpConversion : ConversionPatternBase<AndOp> {
   using ConversionPatternBase<AndOp>::ConversionPatternBase;
 
@@ -144,33 +235,46 @@ struct CombAndOpConversion : ConversionPatternBase<AndOp> {
         op->getResult(0));
     std::vector<Value> connections(
         {adaptor.getInputs()[0], adaptor.getInputs()[1], resultWire});
-    mlir::Attribute portarr[3] = {getStr("\\A"), getStr("\\B"), getStr("\\Y")};
-    mlir::Attribute paramarr[] = {
-        getParameter("\\A_SIGNED", 0),
-        getParameter("\\A_WIDTH", cast<mlir::IntegerAttr>(
-                                      cast<rtlil::MValueType>(
-                                          adaptor.getInputs()[0].getType())
-                                          .getWidth())
-                                      .getInt()),
-        getParameter("\\B_SIGNED", 0),
-        getParameter("\\B_WIDTH", cast<mlir::IntegerAttr>(
-                                      cast<rtlil::MValueType>(
-                                          adaptor.getInputs()[1].getType())
-                                          .getWidth())
-                                      .getInt()),
-        getParameter(
-            "\\Y_WIDTH",
-            cast<mlir::IntegerAttr>(
-                cast<rtlil::MValueType>(resultWire.getType()).getWidth())
-                .getInt())};
-    mlir::ArrayAttr portnames = rewriter.getArrayAttr(portarr);
-    mlir::ArrayAttr params = rewriter.getArrayAttr(paramarr);
-    rewriter.create<rtlil::CellOp>(op.getLoc(), genLocal(rewriter), "$and",
-                                   std::move(connections), portnames, params);
+    rewriter.create<rtlil::AndOp>(
+        op->getLoc(), genLocal(rewriter), std::move(connections),
+        op.getInputs()[0].getType().getIntOrFloatBitWidth(), false);
     rewriter.replaceOp(op, resultWire);
     return success();
   }
-}; // namespace
+};
+
+struct ConstantConversion : ConversionPatternBase<hw::ConstantOp> {
+  using ConversionPatternBase<hw::ConstantOp>::ConversionPatternBase;
+
+  LogicalResult
+  matchAndRewrite(hw::ConstantOp op, OpAdaptor adaptor,
+                  ConversionPatternRewriter &rewriter) const override {
+    auto outType = getTypeConverter()->convertType<rtlil::MValueType>(
+        op->getResultTypes()[0]);
+    mlir::IntegerAttr value = adaptor.getValueAttr();
+    auto width = value.getType().getIntOrFloatBitWidth();
+    if (width > 64) {
+      return failure();
+    }
+    uint64_t intVal = value.getInt();
+
+    llvm::SmallVector<Attribute> v;
+
+    for (unsigned int idx = 0; idx < width; idx++) {
+      if (intVal & (1ull << idx)) {
+        v.emplace_back(
+            rtlil::StateEnumAttr::get(getContext(), rtlil::StateEnum::S1));
+      } else {
+        v.emplace_back(
+            rtlil::StateEnumAttr::get(getContext(), rtlil::StateEnum::S0));
+      }
+    }
+
+    rewriter.replaceOpWithNewOp<rtlil::ConstOp>(op, outType,
+                                                rewriter.getArrayAttr(v));
+    return success();
+  }
+};
 
 struct ModuleConversion : ConversionPatternBase<hw::HWModuleOp> {
   using ConversionPatternBase<hw::HWModuleOp>::ConversionPatternBase;
@@ -295,6 +399,74 @@ struct InstanceConversion : ConversionPatternBase<hw::InstanceOp> {
   }
 };
 
+struct ICMPConversion : ConversionPatternBase<comb::ICmpOp> {
+  using ConversionPatternBase<comb::ICmpOp>::ConversionPatternBase;
+
+  LogicalResult
+  matchAndRewrite(comb::ICmpOp op, OpAdaptor adaptor,
+                  ConversionPatternRewriter &rewriter) const override {
+    auto pred = adaptor.getPredicate();
+    if (static_cast<int>(pred) > 10 || !adaptor.getTwoState()) {
+      return failure(); // currently not supported
+    }
+    auto resultType = getTypeConverter()->convertType(op->getResultTypes()[0]);
+    auto resultWire =
+        getTypeConverter()
+            ->materializeTargetConversion(rewriter, op->getLoc(), resultType,
+                                          op->getResult(0))
+            .getDefiningOp<rtlil::WireOp>();
+    rewriter.modifyOpInPlace(
+        resultWire, [&] { resultWire.setNameAttr(genLocal(rewriter)); });
+    mlir::Value connections[3] = {adaptor.getLhs(), adaptor.getRhs(),
+                                  resultWire};
+    switch (pred) {
+    case ICmpPredicate::eq:
+      rewriter.create<rtlil::EQOp>(
+          op->getLoc(), genLocal(rewriter), connections,
+          op.getLhs().getType().getIntOrFloatBitWidth(), false);
+      break;
+    case ICmpPredicate::ne:
+      rewriter.create<rtlil::NEOp>(
+          op->getLoc(), genLocal(rewriter), connections,
+          op.getLhs().getType().getIntOrFloatBitWidth(), false);
+      break;
+    case ICmpPredicate::ugt:
+    case ICmpPredicate::sgt:
+      rewriter.create<rtlil::GTOp>(
+          op->getLoc(), genLocal(rewriter), connections,
+          op.getLhs().getType().getIntOrFloatBitWidth(),
+          pred == ICmpPredicate::sgt);
+      break;
+    case ICmpPredicate::ult:
+    case ICmpPredicate::slt:
+      rewriter.create<rtlil::LTOp>(
+          op->getLoc(), genLocal(rewriter), connections,
+          op.getLhs().getType().getIntOrFloatBitWidth(),
+          pred == ICmpPredicate::slt);
+      break;
+    case ICmpPredicate::ule:
+    case ICmpPredicate::sle:
+      rewriter.create<rtlil::LEOp>(
+          op->getLoc(), genLocal(rewriter), connections,
+          op.getLhs().getType().getIntOrFloatBitWidth(),
+          pred == ICmpPredicate::sle);
+      break;
+    case ICmpPredicate::uge:
+    case ICmpPredicate::sge:
+      rewriter.create<rtlil::GEOp>(
+          op->getLoc(), genLocal(rewriter), connections,
+          op.getLhs().getType().getIntOrFloatBitWidth(),
+          pred == ICmpPredicate::sge);
+      break;
+    default:
+      return failure();
+      break;
+    }
+    rewriter.replaceOp(op, resultWire);
+    return success();
+  }
+};
+
 //===----------------------------------------------------------------------===//
 // Convert Comb to SMT pass
 //===----------------------------------------------------------------------===//
@@ -309,10 +481,11 @@ struct ConvertCombToRTLILPass
 static void populateCombToRTLILConversionPatterns(
     TypeConverter &converter, rtlil::ConversionPatternContext &rtlilContext,
     RewritePatternSet &patterns) {
-  patterns
-      .add<ModuleConversion, OutputConversion, CombAndOpConversion,
-           InstanceConversion, CompRegOpResetConversion, CompRegOpConversion>(
-          converter, rtlilContext, patterns.getContext());
+  patterns.add<ModuleConversion, OutputConversion, CombAndOpConversion,
+               InstanceConversion, CompRegOpResetConversion,
+               CompRegOpConversion, FirRegOpResetConversion, FirRegOpConversion,
+               ConstantConversion, ICMPConversion>(converter, rtlilContext,
+                                                   patterns.getContext());
 }
 
 void ConvertCombToRTLILPass::runOnOperation() {

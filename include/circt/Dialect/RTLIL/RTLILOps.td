@@ -176,6 +176,49 @@ class MValueExpander  {
 
 class FixedWidths<list<string> widths> : MValueExpander, TraitList<!foreach(idx, !range(widths), AllMatch<["::llvm::cast<::mlir::IntegerAttr>(::llvm::cast<"# typeName #">(getOperand(" # idx # ").getType()).getWidth()).getInt()", "" # widths[idx]], "input " # idx # " width is " # widths[idx]>)>;
 
+def AndOp : RTLIL_Op<"and", [DeclareOpInterfaceMethods<CellOpInterface>, FixedOperands<3>, FixedWidths<["$width", "$width", "$width"]>]> {
+  let arguments = (ins StrAttr:$name,
+                      Variadic<RTLILValue>:$connections,
+                      I32Attr:$width,
+                      I32Attr:$opsSigned,
+                      DefaultValuedAttr<StrAttr, [{"$$and"}]>:$type,
+                      DefaultValuedAttr<StrArrayAttr, [{ {"\\A", "\\B", "\\Y"} }]>:$ports);
+  DerivedAttr parameters = DerivedAttr<"::mlir::ArrayAttr", [{
+                            return ::circt::rtlil::createParamsAttr(getContext(), {
+                              {"\\A_SIGNED", 32, getOpsSigned()},
+                              {"\\B_SIGNED", 32, getOpsSigned()},
+                              {"\\A_WIDTH", 32, getWidth()},
+                              {"\\B_WIDTH", 32, getWidth()},
+                              {"\\Y_WIDTH", 32, getWidth()},
+                            });
+                          }], "getParameters()">;
+}
+
+class CmpOp<string t> : RTLIL_Op<t, [DeclareOpInterfaceMethods<CellOpInterface>, FixedOperands<3>, FixedWidths<["$width", "$width", "1"]>]> {
+  let arguments = (ins StrAttr:$name,
+                      Variadic<RTLILValue>:$connections,
+                      I32Attr:$width,
+                      I32Attr:$opsSigned,
+                      DefaultValuedAttr<StrAttr, [{"$$}] # t # [{"}]>:$type,
+                      DefaultValuedAttr<StrArrayAttr, [{ {"\\A", "\\B", "\\Y"} }]>:$ports);
+  DerivedAttr parameters = DerivedAttr<"::mlir::ArrayAttr", [{
+                            return ::circt::rtlil::createParamsAttr(getContext(), {
+                              {"\\A_SIGNED", 32, getOpsSigned()},
+                              {"\\B_SIGNED", 32, getOpsSigned()},
+                              {"\\A_WIDTH", 32, getWidth()},
+                              {"\\B_WIDTH", 32, getWidth()},
+                              {"\\Y_WIDTH", 32, 1},
+                            });
+                          }], "getParameters()">;
+}
+
+def GTOp : CmpOp<"gt">;
+def EQOp : CmpOp<"eq">;
+def NEOp : CmpOp<"ne">;
+def GEOp : CmpOp<"ge">;
+def LEOp : CmpOp<"le">;
+def LTOp : CmpOp<"lt">;
+
 def DFFOp : RTLIL_Op<"dff", [DeclareOpInterfaceMethods<CellOpInterface>, FixedOperands<3>, FixedWidths<["1", "$width", "$width"]>]> {
   let arguments = (ins StrAttr:$name,
                       Variadic<RTLILValue>:$connections,
