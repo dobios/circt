@@ -176,12 +176,12 @@ class MValueExpander  {
 
 class FixedWidths<list<string> widths> : MValueExpander, TraitList<!foreach(idx, !range(widths), AllMatch<["::llvm::cast<::mlir::IntegerAttr>(::llvm::cast<"# typeName #">(getOperand(" # idx # ").getType()).getWidth()).getInt()", "" # widths[idx]], "input " # idx # " width is " # widths[idx]>)>;
 
-def AndOp : RTLIL_Op<"and", [DeclareOpInterfaceMethods<CellOpInterface>, FixedOperands<3>, FixedWidths<["$width", "$width", "$width"]>]> {
+class BinOp<string t> : RTLIL_Op<t, [DeclareOpInterfaceMethods<CellOpInterface>, FixedOperands<3>, FixedWidths<["$width", "$width", "$width"]>]> {
   let arguments = (ins StrAttr:$name,
                       Variadic<RTLILValue>:$connections,
                       I32Attr:$width,
                       I32Attr:$opsSigned,
-                      DefaultValuedAttr<StrAttr, [{"$$and"}]>:$type,
+                      DefaultValuedAttr<StrAttr, [{"$$}] # t # [{"}]>:$type,
                       DefaultValuedAttr<StrArrayAttr, [{ {"\\A", "\\B", "\\Y"} }]>:$ports);
   DerivedAttr parameters = DerivedAttr<"::mlir::ArrayAttr", [{
                             return ::circt::rtlil::createParamsAttr(getContext(), {
@@ -194,41 +194,11 @@ def AndOp : RTLIL_Op<"and", [DeclareOpInterfaceMethods<CellOpInterface>, FixedOp
                           }], "getParameters()">;
 }
 
-def OrOp : RTLIL_Op<"or", [DeclareOpInterfaceMethods<CellOpInterface>, FixedOperands<3>, FixedWidths<["$width", "$width", "$width"]>]> {
-  let arguments = (ins StrAttr:$name,
-                      Variadic<RTLILValue>:$connections,
-                      I32Attr:$width,
-                      I32Attr:$opsSigned,
-                      DefaultValuedAttr<StrAttr, [{"$$or"}]>:$type,
-                      DefaultValuedAttr<StrArrayAttr, [{ {"\\A", "\\B", "\\Y"} }]>:$ports);
-  DerivedAttr parameters = DerivedAttr<"::mlir::ArrayAttr", [{
-                            return ::circt::rtlil::createParamsAttr(getContext(), {
-                              {"\\A_SIGNED", 32, getOpsSigned()},
-                              {"\\B_SIGNED", 32, getOpsSigned()},
-                              {"\\A_WIDTH", 32, getWidth()},
-                              {"\\B_WIDTH", 32, getWidth()},
-                              {"\\Y_WIDTH", 32, getWidth()},
-                            });
-                          }], "getParameters()">;
-}
+def AndOp : BinOp<"and">;
 
-def SubOp : RTLIL_Op<"sub", [DeclareOpInterfaceMethods<CellOpInterface>, FixedOperands<3>, FixedWidths<["$width", "$width", "$width"]>]> {
-  let arguments = (ins StrAttr:$name,
-                      Variadic<RTLILValue>:$connections,
-                      I32Attr:$width,
-                      I32Attr:$opsSigned,
-                      DefaultValuedAttr<StrAttr, [{"$$sub"}]>:$type,
-                      DefaultValuedAttr<StrArrayAttr, [{ {"\\A", "\\B", "\\Y"} }]>:$ports);
-  DerivedAttr parameters = DerivedAttr<"::mlir::ArrayAttr", [{
-                            return ::circt::rtlil::createParamsAttr(getContext(), {
-                              {"\\A_SIGNED", 32, getOpsSigned()},
-                              {"\\B_SIGNED", 32, getOpsSigned()},
-                              {"\\A_WIDTH", 32, getWidth()},
-                              {"\\B_WIDTH", 32, getWidth()},
-                              {"\\Y_WIDTH", 32, getWidth()},
-                            });
-                          }], "getParameters()">;
-}
+def OrOp : BinOp<"or">;
+
+def SubOp: BinOp<"sub">;
 
 def MuxOp : RTLIL_Op<"mux", [DeclareOpInterfaceMethods<CellOpInterface>, FixedOperands<4>, FixedWidths<["$width", "$width", "1", "$width"]>]> {
   let arguments = (ins StrAttr:$name,

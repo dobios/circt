@@ -25,4 +25,4 @@
 #include "mlir/Interfaces/FunctionInterfaces.h"
 #include "mlir/Interfaces/SideEffectInterfaces.h"
 
-#endif // RTLIL_RTLILOPS_H
+#endif
