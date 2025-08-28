@@ -140,6 +140,19 @@ public:
                              Value v) const {
     return r.getStringAttr(rtlil::asOperandRaw(v));
   }
+  rtlil::WireOp genLocalWire(Location l, Value v,
+                             mlir::ConversionPatternRewriter &rewriter) const {
+    auto t = Super::getTypeConverter()->convertType(v.getType());
+    if (!t)
+      return {};
+    rtlil::WireOp result = Super::getTypeConverter()
+                               ->materializeTargetConversion(rewriter, l, t, v)
+                               .template getDefiningOp<rtlil::WireOp>();
+    if (result)
+      rewriter.modifyOpInPlace(result,
+                               [&] { result.setNameAttr(genLocal(rewriter)); });
+    return result;
+  }
 };
 } // namespace circt::rtlil
 

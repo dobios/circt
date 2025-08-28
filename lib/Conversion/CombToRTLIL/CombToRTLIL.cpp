@@ -20,6 +20,7 @@
 #include "circt/Support/Naming.h"
 #include "mlir-c/BuiltinAttributes.h"
 #include "mlir-c/IR.h"
+#include "mlir/Analysis/TopologicalSortUtils.h"
 #include "mlir/IR/AsmState.h"
 #include "mlir/IR/Attributes.h"
 #include "mlir/IR/Builders.h"
@@ -27,10 +28,12 @@
 #include "mlir/IR/BuiltinTypes.h"
 #include "mlir/IR/MLIRContext.h"
 #include "mlir/IR/OperationSupport.h"
+#include "mlir/IR/PatternMatch.h"
 #include "mlir/IR/SymbolTable.h"
 #include "mlir/IR/Types.h"
 #include "mlir/IR/ValueRange.h"
 #include "mlir/Pass/Pass.h"
+#include "mlir/Pass/PassManager.h"
 #include "mlir/Support/LLVM.h"
 #include "mlir/Support/TypeID.h"
 #include "mlir/Transforms/DialectConversion.h"
@@ -45,8 +48,10 @@
 #include <atomic>
 #include <cstdint>
 #include <iostream>
+#include <memory>
 #include <mutex>
 #include <optional>
+#include <type_traits>
 #include <unordered_map>
 
 namespace circt {
@@ -76,18 +81,12 @@ struct CompRegOpResetConversion : ConversionPatternBase<seq::CompRegOp> {
     if (!op.getReset() || op.getInitialValue()) {
       return failure();
     }
-    auto resultType = getTypeConverter()->convertType(op.getData().getType());
     rtlil::WireOp resultWire =
-        getTypeConverter()
-            ->materializeTargetConversion(rewriter, op->getLoc(), resultType,
-                                          op.getData())
-            .getDefiningOp<rtlil::WireOp>();
+        genLocalWire(op->getLoc(), op.getData(), rewriter);
     auto name = op.getInnerSym()
                     ? makeGlobal(rewriter, op.getInnerSymAttr().getSymName(),
                                  op->getLoc())
                     : genLocal(rewriter);
-    rewriter.modifyOpInPlace(
-        resultWire, [&] { resultWire.setNameAttr(genLocal(rewriter)); });
     std::vector<Value> connections({adaptor.getClk(), adaptor.getInput(),
                                     adaptor.getReset(), adaptor.getResetValue(),
                                     resultWire});
@@ -107,19 +106,13 @@ struct CompRegOpConversion : ConversionPatternBase<seq::CompRegOp> {
     if (op.getReset() || op.getInitialValue()) {
       return failure();
     }
-    auto resultType = getTypeConverter()->convertType(op.getData().getType());
     rtlil::WireOp resultWire =
-        getTypeConverter()
-            ->materializeTargetConversion(rewriter, op->getLoc(), resultType,
-                                          op.getData())
-            .getDefiningOp<rtlil::WireOp>();
+        genLocalWire(op->getLoc(), op.getData(), rewriter);
     auto name = op.getInnerSym()
                     ? makeGlobal(rewriter, op.getInnerSymAttr().getSymName(),
                                  op->getLoc()) // this should be prefixed
                                                // by the module probably
                     : genLocal(rewriter);
-    rewriter.modifyOpInPlace(
-        resultWire, [&] { resultWire.setNameAttr(genLocal(rewriter)); });
     std::vector<Value> connections(
         {adaptor.getClk(), adaptor.getInput(), resultWire});
     rewriter.create<rtlil::DFFOp>(op.getLoc(), name, std::move(connections),
@@ -138,19 +131,13 @@ struct FirRegOpConversion : ConversionPatternBase<seq::FirRegOp> {
     if (op.getReset() || op.getPreset()) {
       return failure();
     }
-    auto resultType = getTypeConverter()->convertType(op.getData().getType());
     rtlil::WireOp resultWire =
-        getTypeConverter()
-            ->materializeTargetConversion(rewriter, op->getLoc(), resultType,
-                                          op.getData())
-            .getDefiningOp<rtlil::WireOp>();
+        genLocalWire(op->getLoc(), op.getData(), rewriter);
     auto name = op.getInnerSym()
                     ? makeGlobal(rewriter, op.getInnerSymAttr().getSymName(),
                                  op->getLoc()) // this should be prefixed
                                                // by the module probably
                     : genLocal(rewriter);
-    rewriter.modifyOpInPlace(
-        resultWire, [&] { resultWire.setNameAttr(genLocal(rewriter)); });
     std::vector<Value> connections(
         {adaptor.getClk(), adaptor.getNext(), resultWire});
     rewriter.create<rtlil::DFFOp>(op.getLoc(), name, std::move(connections),
@@ -169,18 +156,12 @@ struct FirRegOpResetConversion : ConversionPatternBase<seq::FirRegOp> {
     if (!op.getReset() || op.getPreset()) {
       return failure();
     }
-    auto resultType = getTypeConverter()->convertType(op.getData().getType());
     rtlil::WireOp resultWire =
-        getTypeConverter()
-            ->materializeTargetConversion(rewriter, op->getLoc(), resultType,
-                                          op.getData())
-            .getDefiningOp<rtlil::WireOp>();
+        genLocalWire(op->getLoc(), op.getData(), rewriter);
     auto name = op.getInnerSym()
                     ? makeGlobal(rewriter, op.getInnerSymAttr().getSymName(),
                                  op->getLoc())
                     : genLocal(rewriter);
-    rewriter.modifyOpInPlace(
-        resultWire, [&] { resultWire.setNameAttr(genLocal(rewriter)); });
     std::vector<Value> connections({adaptor.getClk(), adaptor.getNext(),
                                     adaptor.getReset(), adaptor.getResetValue(),
                                     resultWire});
@@ -188,22 +169,17 @@ struct FirRegOpResetConversion : ConversionPatternBase<seq::FirRegOp> {
       rewriter.create<rtlil::ALDFFOp>(
           op->getLoc(), name, std::move(connections), resultWire.getWidth());
     } else {
-      auto temptype = adaptor.getReset().getType();
-      if (!temptype) {
-        return failure();
-      }
       rtlil::WireOp bufferedResetWire =
-          getTypeConverter()
-              ->materializeTargetConversion(rewriter, op->getLoc(), temptype,
-                                            adaptor.getReset())
-              .getDefiningOp<rtlil::WireOp>();
+          genLocalWire(op->getLoc(), op.getReset(), rewriter);
       {
-        auto syncedResetWire = getTypeConverter()->materializeTargetConversion(
-            rewriter, op->getLoc(), temptype, adaptor.getReset());
+        auto syncedResetWire =
+            genLocalWire(op->getLoc(), op.getReset(), rewriter);
+        if (!syncedResetWire)
+          return failure();
         Value connections[3] = {adaptor.getClk(), adaptor.getReset(),
                                 syncedResetWire};
         rewriter.create<rtlil::DFFOp>(op.getLoc(), genLocal(rewriter),
-                                      connections, resultWire.getWidth());
+                                      connections, syncedResetWire.getWidth());
         Value connections2[3] = {syncedResetWire, adaptor.getReset(),
                                  bufferedResetWire};
         rewriter.create<rtlil::AndOp>(op->getLoc(), genLocal(rewriter),
@@ -220,25 +196,75 @@ struct FirRegOpResetConversion : ConversionPatternBase<seq::FirRegOp> {
   }
 };
 
-struct CombAndOpConversion : ConversionPatternBase<AndOp> {
-  using ConversionPatternBase<AndOp>::ConversionPatternBase;
+template <typename BinOp, typename ResultOp, typename = void>
+struct BinOpConversion;
 
-  LogicalResult
-  matchAndRewrite(AndOp op, OpAdaptor adaptor,
-                  ConversionPatternRewriter &rewriter) const override {
+template <typename BinOp, typename ResultOp>
+struct BinOpConversion<BinOp, ResultOp,
+                       std::enable_if_t<std::is_member_function_pointer_v<
+                           decltype(&BinOp::getInputs)>>>
+    : ConversionPatternBase<BinOp> {
+  using Super = ConversionPatternBase<BinOp>;
+  using Super::ConversionPatternBase;
+  using typename Super::OpAdaptor;
+
+  LogicalResult matchAndRewrite(BinOp op, OpAdaptor adaptor,
+                                ConversionPatternRewriter &r) const override {
     if (op.getNumOperands() != 2)
       return failure();
 
-    auto resultWire = getTypeConverter()->materializeTargetConversion(
-        rewriter, op->getLoc(),
-        getTypeConverter()->convertType(op->getResultTypes().front()),
-        op->getResult(0));
+    auto resultWire = Super::genLocalWire(op->getLoc(), op->getResult(0), r);
     std::vector<Value> connections(
         {adaptor.getInputs()[0], adaptor.getInputs()[1], resultWire});
-    rewriter.create<rtlil::AndOp>(
-        op->getLoc(), genLocal(rewriter), std::move(connections),
-        op.getInputs()[0].getType().getIntOrFloatBitWidth(), false);
-    rewriter.replaceOp(op, resultWire);
+    r.create<ResultOp>(op->getLoc(), Super::genLocal(r), std::move(connections),
+                       op.getInputs()[0].getType().getIntOrFloatBitWidth(),
+                       false);
+    r.replaceOp(op, resultWire);
+    return success();
+  }
+};
+
+template <typename BinOp, typename ResultOp>
+struct BinOpConversion<BinOp, ResultOp,
+                       std::enable_if_t<std::is_member_function_pointer_v<
+                           decltype(&BinOp::getLhs)>>>
+    : ConversionPatternBase<BinOp> {
+  using Super = ConversionPatternBase<BinOp>;
+  using Super::ConversionPatternBase;
+  using typename Super::OpAdaptor;
+
+  LogicalResult matchAndRewrite(BinOp op, OpAdaptor adaptor,
+                                ConversionPatternRewriter &r) const override {
+    if (op.getNumOperands() != 2)
+      return failure();
+
+    auto resultWire = Super::genLocalWire(op->getLoc(), op->getResult(0), r);
+    std::vector<Value> connections(
+        {adaptor.getLhs(), adaptor.getRhs(), resultWire});
+    r.create<ResultOp>(op->getLoc(), Super::genLocal(r), std::move(connections),
+                       op.getLhs().getType().getIntOrFloatBitWidth(), false);
+    r.replaceOp(op, resultWire);
+    return success();
+  }
+};
+
+struct MuxOpConversion : ConversionPatternBase<MuxOp> {
+  using ConversionPatternBase<MuxOp>::ConversionPatternBase;
+
+  LogicalResult matchAndRewrite(MuxOp op, OpAdaptor adaptor,
+                                ConversionPatternRewriter &r) const override {
+    if (op.getTrueValue().getType() != op.getFalseValue().getType()) {
+      return failure();
+    }
+
+    auto resultWire = genLocalWire(op->getLoc(), op->getResult(0), r);
+    Value connections[4] = {adaptor.getFalseValue(), adaptor.getTrueValue(),
+                            adaptor.getCond(), resultWire};
+
+    r.create<rtlil::MuxOp>(op->getLoc(), genLocal(r), connections,
+                           op.getTrueValue().getType().getIntOrFloatBitWidth());
+    r.replaceOp(op, resultWire);
+
     return success();
   }
 };
@@ -298,7 +324,7 @@ struct ModuleConversion : ConversionPatternBase<hw::HWModuleOp> {
           getTypeConverter()->convertType(op.getInputTypes()[input]), {});
       auto wire = replacement.getDefiningOp<rtlil::WireOp>();
       rewriter.modifyOpInPlace(wire, [&]() {
-        wire.setPortId(op.getPortIdForInputId(input));
+        wire.setPortId(op.getPortIdForInputId(input) + 1);
         wire.setName(makeGlobal(rewriter,
                                 op.getPortName(op.getPortIdForInputId(input)),
                                 op->getLoc()));
@@ -334,7 +360,17 @@ struct ModuleConversion : ConversionPatternBase<hw::HWModuleOp> {
     return success();
   }
 };
-} // namespace
+
+struct ModuleSorter : ConversionPatternBase<mlir::ModuleOp> {
+  using ConversionPatternBase<mlir::ModuleOp>::ConversionPatternBase;
+  LogicalResult
+  matchAndRewrite(mlir::ModuleOp op, OpAdaptor adaptor,
+                  ConversionPatternRewriter &rewriter) const override {
+    rewriter.modifyOpInPlace(op,
+                             [&] { mlir::sortTopologically(op.getBody()); });
+    return success();
+  }
+};
 
 struct OutputConversion : ConversionPatternBase<hw::OutputOp> {
   using ConversionPatternBase<hw::OutputOp>::ConversionPatternBase;
@@ -348,7 +384,7 @@ struct OutputConversion : ConversionPatternBase<hw::OutputOp> {
       auto guard = rtlilContext.lock();
       rewriter.modifyOpInPlace(op, [&] {
         op.setPortOutput(true);
-        op.setPortId(rtlilContext.portMap[i].first);
+        op.setPortId(rtlilContext.portMap[i].first + 1);
         op.setName(rtlilContext.portMap[i++].second);
       });
     }
@@ -409,14 +445,7 @@ struct ICMPConversion : ConversionPatternBase<comb::ICmpOp> {
     if (static_cast<int>(pred) > 10 || !adaptor.getTwoState()) {
       return failure(); // currently not supported
     }
-    auto resultType = getTypeConverter()->convertType(op->getResultTypes()[0]);
-    auto resultWire =
-        getTypeConverter()
-            ->materializeTargetConversion(rewriter, op->getLoc(), resultType,
-                                          op->getResult(0))
-            .getDefiningOp<rtlil::WireOp>();
-    rewriter.modifyOpInPlace(
-        resultWire, [&] { resultWire.setNameAttr(genLocal(rewriter)); });
+    auto resultWire = genLocalWire(op->getLoc(), op.getResult(), rewriter);
     mlir::Value connections[3] = {adaptor.getLhs(), adaptor.getRhs(),
                                   resultWire};
     switch (pred) {
@@ -467,6 +496,7 @@ struct ICMPConversion : ConversionPatternBase<comb::ICmpOp> {
   }
 };
 
+} // namespace
 //===----------------------------------------------------------------------===//
 // Convert Comb to SMT pass
 //===----------------------------------------------------------------------===//
@@ -476,16 +506,28 @@ struct ConvertCombToRTLILPass
     : public circt::impl::ConvertCombToRTLILBase<ConvertCombToRTLILPass> {
   void runOnOperation() override;
 };
+
+struct SortModulePass
+    : public mlir::PassWrapper<SortModulePass,
+                               mlir::OperationPass<mlir::ModuleOp>> {
+  void runOnOperation() override {
+    auto op = getOperation();
+    mlir::sortTopologically(op.getBody());
+  }
+  MLIR_DEFINE_EXPLICIT_INTERNAL_INLINE_TYPE_ID(SortModulePass);
+};
 } // namespace
 
 static void populateCombToRTLILConversionPatterns(
     TypeConverter &converter, rtlil::ConversionPatternContext &rtlilContext,
     RewritePatternSet &patterns) {
-  patterns.add<ModuleConversion, OutputConversion, CombAndOpConversion,
-               InstanceConversion, CompRegOpResetConversion,
-               CompRegOpConversion, FirRegOpResetConversion, FirRegOpConversion,
-               ConstantConversion, ICMPConversion>(converter, rtlilContext,
-                                                   patterns.getContext());
+  patterns.add<
+      ModuleConversion, OutputConversion, BinOpConversion<AndOp, rtlil::AndOp>,
+      BinOpConversion<SubOp, rtlil::SubOp>, BinOpConversion<OrOp, rtlil::OrOp>,
+      MuxOpConversion, InstanceConversion, CompRegOpResetConversion,
+      CompRegOpConversion, FirRegOpResetConversion, FirRegOpConversion,
+      ConstantConversion, ICMPConversion>(converter, rtlilContext,
+                                          patterns.getContext());
 }
 
 void ConvertCombToRTLILPass::runOnOperation() {
@@ -504,4 +546,21 @@ void ConvertCombToRTLILPass::runOnOperation() {
                                           std::move(patterns)))) {
     return signalPassFailure();
   }
+  RewritePatternSet sortPatterns(&getContext());
+  sortPatterns.add<ModuleSorter>(converter, context, sortPatterns.getContext());
+
+  ConversionTarget sortTarget(getContext());
+  // sortTarget.addDynamicallyLegalOp<mlir::ModuleOp>(
+  // [](mlir::ModuleOp operation) {
+  //
+  // });
+  mlir::OpPassManager dynamicPm("builtin.module");
+  dynamicPm.addNestedPass<mlir::ModuleOp>(std::make_unique<SortModulePass>());
+  if (failed(runPipeline(dynamicPm, getOperation()))) {
+    signalPassFailure();
+  }
+  // if (failed(mlir::applyFullConversion(getOperation(), target,
+  //  std::move(sortPatterns)))) {
+  // return signalPassFailure();
+  // }
 }
