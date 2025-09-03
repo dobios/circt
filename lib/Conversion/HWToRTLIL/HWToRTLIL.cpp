@@ -1,4 +1,4 @@
-//===- CombToRTLIL.cpp ----------------------------------------------------===//
+//===- HWToRTLIL.cpp ----------------------------------------------------===//
 //
 // Part of the LLVM Project, under the Apache License v2.0 with LLVM Exceptions.
 // See https://llvm.org/LICENSE.txt for license information.
@@ -6,7 +6,7 @@
 //
 //===----------------------------------------------------------------------===//
 
-#include "circt/Conversion/CombToRTLIL.h"
+#include "circt/Conversion/HWToRTLIL.h"
 #include "circt/Conversion/RTLILCommon.h"
 #include "circt/Dialect/Comb/CombDialect.h"
 #include "circt/Dialect/Comb/CombOps.h"
@@ -42,7 +42,7 @@
 #include <unordered_map>
 
 namespace circt {
-#define GEN_PASS_DEF_CONVERTCOMBTORTLIL
+#define GEN_PASS_DEF_CONVERTHWTORTLIL
 #include "circt/Conversion/Passes.h.inc"
 } // namespace circt
 
@@ -489,8 +489,8 @@ struct ICMPConversion : ConversionPatternBase<comb::ICmpOp> {
 //===----------------------------------------------------------------------===//
 
 namespace {
-struct ConvertCombToRTLILPass
-    : public circt::impl::ConvertCombToRTLILBase<ConvertCombToRTLILPass> {
+struct ConvertHWToRTLILPass
+    : public circt::impl::ConvertHWToRTLILBase<ConvertHWToRTLILPass> {
   void runOnOperation() override;
 };
 
@@ -505,7 +505,7 @@ struct SortModulePass
 };
 } // namespace
 
-static void populateCombToRTLILConversionPatterns(
+static void populateHWToRTLILConversionPatterns(
     TypeConverter &converter, rtlil::ConversionPatternContext &rtlilContext,
     RewritePatternSet &patterns) {
   patterns.add<
@@ -517,7 +517,7 @@ static void populateCombToRTLILConversionPatterns(
                                           patterns.getContext());
 }
 
-void ConvertCombToRTLILPass::runOnOperation() {
+void ConvertHWToRTLILPass::runOnOperation() {
   ConversionTarget target(getContext());
   mlir::ConversionConfig config;
   target.addLegalDialect<rtlil::RTLILDialect>();
@@ -528,7 +528,7 @@ void ConvertCombToRTLILPass::runOnOperation() {
 
   RewritePatternSet patterns(&getContext());
   rtlil::RTLILTypeConverter converter;
-  populateCombToRTLILConversionPatterns(converter, context, patterns);
+  populateHWToRTLILConversionPatterns(converter, context, patterns);
   if (failed(mlir::applyPartialConversion(getOperation(), target,
                                           std::move(patterns)))) {
     return signalPassFailure();
@@ -537,17 +537,9 @@ void ConvertCombToRTLILPass::runOnOperation() {
   sortPatterns.add<ModuleSorter>(converter, context, sortPatterns.getContext());
 
   ConversionTarget sortTarget(getContext());
-  // sortTarget.addDynamicallyLegalOp<mlir::ModuleOp>(
-  // [](mlir::ModuleOp operation) {
-  //
-  // });
   mlir::OpPassManager dynamicPm("builtin.module");
   dynamicPm.addNestedPass<mlir::ModuleOp>(std::make_unique<SortModulePass>());
   if (failed(runPipeline(dynamicPm, getOperation()))) {
     signalPassFailure();
   }
-  // if (failed(mlir::applyFullConversion(getOperation(), target,
-  //  std::move(sortPatterns)))) {
-  // return signalPassFailure();
-  // }
 }

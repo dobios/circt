@@ -1,5 +1,5 @@
-#ifndef CIRCT_CONVERSION_COMBTORTLIL_H
-#define CIRCT_CONVERSION_COMBTORTLIL_H
+#ifndef CIRCT_CONVERSION_HWTORTLIL_H
+#define CIRCT_CONVERSION_HWTORTLIL_H
 
 #include "circt/Support/LLVM.h"
 #include "llvm/ADT/SmallVector.h"
@@ -7,7 +7,7 @@
 
 namespace circt {
 
-#define GEN_PASS_DECL_CONVERTCOMBTORTLIL
+#define GEN_PASS_DECL_CONVERTHWTORTLIL
 #include "circt/Conversion/Passes.h.inc"
 
 } // namespace circt

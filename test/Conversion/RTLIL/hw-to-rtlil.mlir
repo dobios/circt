@@ -1,4 +1,4 @@
-// RUN: circt-opt %s --convert-comb-to-rtlil | FileCheck %s
+// RUN: circt-opt %s --convert-hw-to-rtlil | FileCheck %s
 
 // CHECK-LABEL: @"\\test_{{[0-9]*}}"
 hw.module @test(in %arg0: i32, in %arg1: i32, in %arg2: i32, in %arg3: i32, out out0: i32, out out1: i32) {

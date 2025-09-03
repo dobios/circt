@@ -1,5 +1,5 @@
-add_circt_conversion_library(CIRCTCombToRTLIL
-  CombToRTLIL.cpp
+add_circt_conversion_library(CIRCTHWToRTLIL
+  HWToRTLIL.cpp
 
   DEPENDS
   CIRCTConversionPassIncGen

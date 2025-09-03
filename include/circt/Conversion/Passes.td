@@ -827,10 +827,10 @@ def ConvertCombToSynth : Pass<"convert-comb-to-synth", "hw::HWModuleOp"> {
 }
 
 //===----------------------------------------------------------------------===//
-// ConvertCombToRTLIL
+// ConvertHWToRTLIL
 //===----------------------------------------------------------------------===//
 
-def ConvertCombToRTLIL: Pass<"convert-comb-to-rtlil", "mlir::ModuleOp"> {
+def ConvertHWToRTLIL: Pass<"convert-hw-to-rtlil", "mlir::ModuleOp"> {
   let summary = "Lower Comb ops to RTLIL ops.";
   let dependentDialects = [
     "circt::rtlil::RTLILDialect",
