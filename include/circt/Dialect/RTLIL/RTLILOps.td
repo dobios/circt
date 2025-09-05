@@ -96,12 +96,16 @@ def MValueTypeImpl : RTLIL_Type<"MValue"> {
   let mnemonic = "val";
 }
 
+class MValueExpander  {
+  string typeName = MValueTypeImpl.cppType;
+}
+
 def RTLILValue : DialectType<RTLIL_Dialect, CPred<"::circt::rtlil::isMValueType($_self)">, "value">;
 
 def ConstAttr
   : TypedArrayAttrBase<StateEnumAttr, "constant multi-valued bitvec">;
 
-def ConstOp : RTLIL_Op<"const"> {
+def ConstOp : MValueExpander, RTLIL_Op<"const", [AllMatch<["llvm::cast<mlir::IntegerAttr>(llvm::cast<mlir::TypedValue<" # typeName # ">>($result).getType().getWidth()).getValue()", "$value.size()"], "bitwidth matches">]> {
   let arguments = (ins ConstAttr:$value);
   let results = (outs RTLILValue:$result);
 }
@@ -109,14 +113,16 @@ def ConstOp : RTLIL_Op<"const"> {
 // TODO Is I32 correct?
 def WireOp : RTLIL_Op<"wire"> {
   let arguments = (ins StrAttr:$name
-                       ,I32Attr:$width
-                       ,I32Attr:$start_offset
-                       ,I32Attr:$port_id
+                       ,BoolAttr:$is_signed
+                       ,DefaultValuedAttr<I32Attr, "0">:$port_id
+                       ,DefaultValuedAttr<I32Attr, "0">:$start_offset
                        ,DefaultValuedAttr<BoolAttr, "false">:$port_input
                        ,DefaultValuedAttr<BoolAttr, "false">:$port_output
                        ,DefaultValuedAttr<BoolAttr, "false">:$upto
-                       ,BoolAttr:$is_signed
   );
+  DerivedAttr width = DerivedAttr<"::mlir::IntegerAttr", [{
+        return mlir::IntegerAttr::get(mlir::IntegerType::get(getContext(), 32), llvm::cast<mlir::IntegerAttr>(llvm::cast<rtlil::MValueType>(this->getResult().getType()).getWidth()).getValue());
+                          }], "getWidth()">;
   let results = (outs RTLILValue:$result);
 }
 
@@ -170,9 +176,7 @@ def CellOp : RTLIL_Op<"cell", [DeclareOpInterfaceMethods<CellOpInterface>]> {
 }
 
 class FixedOperands<int n> : AllMatch<["getNumOperands()", "" # n], "has " # n # " connections">;
-class MValueExpander  {
-  string typeName = MValueTypeImpl.cppType;
-}
+
 
 class FixedWidths<list<string> widths> : MValueExpander, TraitList<!foreach(idx, !range(widths), AllMatch<["::llvm::cast<::mlir::IntegerAttr>(::llvm::cast<"# typeName #">(getOperand(" # idx # ").getType()).getWidth()).getInt()", "" # widths[idx]], "input " # idx # " width is " # widths[idx]>)>;
 

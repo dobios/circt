@@ -1,4 +1,5 @@
 #include "circt/Conversion/RTLILCommon.h"
+#include "circt/Dialect/RTLIL/RTLIL.h"
 #include "circt/Support/LLVM.h"
 #include "llvm/Support/FormatVariadic.h"
 
@@ -44,9 +45,8 @@ mlir::Value RTLILTypeConverter::materializeInt(mlir::OpBuilder &builder,
   if (!isInput) {
     name = builder.getStringAttr(llvm::formatv("${0}", asOperandRaw(vals[0])));
   }
-  return builder.create<rtlil::WireOp>(
-      pos, t, name, cast<mlir::IntegerAttr>(t.getWidth()).getInt(), 0, 0,
-      isInput, 0, 0, 0);
+
+  return builder.create<rtlil::WireOp>(pos, t, name, 0, 0, 0, isInput, 0, 0 );
 }
 
 RTLILTypeConverter::RTLILTypeConverter() : mlir::TypeConverter() {
