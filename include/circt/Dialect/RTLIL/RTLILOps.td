@@ -65,9 +65,9 @@ def ParamAttr : RTLILAttr<"Parameter", "param"> {
   ];
 }
 
-def ParametersAttr
+def ParamArrayAttr
   : TypedArrayAttrBase<ParamAttr, "cell parameters"> {
-  let constBuilderCall = "::circt::rtlil::createParamsAttr($_builder.getContext(), $0)";
+  let constBuilderCall = "::circt::rtlil::createParamArrayAttr($_builder.getContext(), $0)";
 }
 
 // Connectivity
@@ -176,7 +176,7 @@ def CellOp : RTLILOp<"cell", [DeclareOpInterfaceMethods<CellOpInterface>]> {
                        ,StrAttr:$type
                        ,Variadic<RTLILValue>:$connections
                        ,StrArrayAttr:$ports
-                       ,ParametersAttr:$parameters
+                       ,ParamArrayAttr:$parameters
   );
 }
 
@@ -193,7 +193,7 @@ class BinOp<string t> : RTLILOp<t, [DeclareOpInterfaceMethods<CellOpInterface>, 
                       DefaultValuedAttr<StrAttr, [{"$$}] # t # [{"}]>:$type,
                       DefaultValuedAttr<StrArrayAttr, [{ {"\\A", "\\B", "\\Y"} }]>:$ports);
   DerivedAttr parameters = DerivedAttr<"::mlir::ArrayAttr", [{
-                            return ::circt::rtlil::createParamsAttr(getContext(), {
+                            return ::circt::rtlil::createParamArrayAttr(getContext(), {
                               {"\\A_SIGNED", 32, getOpsSigned()},
                               {"\\B_SIGNED", 32, getOpsSigned()},
                               {"\\A_WIDTH", 32, getWidth()},
@@ -214,7 +214,7 @@ def MuxOp : RTLILOp<"mux", [DeclareOpInterfaceMethods<CellOpInterface>, FixedOpe
                       DefaultValuedAttr<StrAttr, [{"$$mux"}]>:$type,
                       DefaultValuedAttr<StrArrayAttr, [{ {"\\A", "\\B", "\\S", "\\Y"} }]>:$ports);
   DerivedAttr parameters = DerivedAttr<"::mlir::ArrayAttr", [{
-                            return ::circt::rtlil::createParamsAttr(getContext(), {
+                            return ::circt::rtlil::createParamArrayAttr(getContext(), {
                               {"\\WIDTH", 32, getWidth()},
                             });
                           }], "getParameters()">;
@@ -228,7 +228,7 @@ class CmpOp<string t> : RTLILOp<t, [DeclareOpInterfaceMethods<CellOpInterface>, 
                       DefaultValuedAttr<StrAttr, [{"$$}] # t # [{"}]>:$type,
                       DefaultValuedAttr<StrArrayAttr, [{ {"\\A", "\\B", "\\Y"} }]>:$ports);
   DerivedAttr parameters = DerivedAttr<"::mlir::ArrayAttr", [{
-                            return ::circt::rtlil::createParamsAttr(getContext(), {
+                            return ::circt::rtlil::createParamArrayAttr(getContext(), {
                               {"\\A_SIGNED", 32, getOpsSigned()},
                               {"\\B_SIGNED", 32, getOpsSigned()},
                               {"\\A_WIDTH", 32, getWidth()},
@@ -252,7 +252,7 @@ def DFFOp : RTLILOp<"dff", [DeclareOpInterfaceMethods<CellOpInterface>, FixedOpe
                       DefaultValuedAttr<StrAttr, [{"$$dff"}]>:$type,
                       DefaultValuedAttr<StrArrayAttr, [{ {"\\CLK", "\\D", "\\Q"} }]>:$ports);
   DerivedAttr parameters = DerivedAttr<"::mlir::ArrayAttr", [{
-                        return ::circt::rtlil::createParamsAttr(getContext(), {
+                        return ::circt::rtlil::createParamArrayAttr(getContext(), {
                           {"\\WIDTH", 32, getWidth()},
                           {"\\CLK_POLARITY", 32, 1}
                         });
@@ -266,7 +266,7 @@ def ALDFFOp : RTLILOp<"aldff", [DeclareOpInterfaceMethods<CellOpInterface>, Fixe
                       DefaultValuedAttr<StrAttr, [{"$$aldff"}]>:$type,
                       DefaultValuedAttr<StrArrayAttr, [{ {"\\CLK", "\\D", "\\ALOAD", "\\AD", "\\Q"} }]>:$ports);
   DerivedAttr parameters = DerivedAttr<"::mlir::ArrayAttr", [{
-                        return ::circt::rtlil::createParamsAttr(getContext(), {
+                        return ::circt::rtlil::createParamArrayAttr(getContext(), {
                           {"\\WIDTH", 32, getWidth()},
                           {"\\CLK_POLARITY", 32, 1},
                           {"\\ALOAD_POLARITY", 32, 1},
@@ -279,7 +279,7 @@ def IntanceOp : RTLILOp<"instance", [DeclareOpInterfaceMethods<CellOpInterface>]
                        FlatSymbolRefAttr:$type,
                        Variadic<RTLILValue>:$connections,
                        StrArrayAttr:$ports,
-                       ParametersAttr:$parameters
+                       ParamArrayAttr:$parameters
   );
 }
 

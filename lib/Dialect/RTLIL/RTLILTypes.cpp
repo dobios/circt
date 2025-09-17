@@ -13,7 +13,7 @@ using namespace mlir;
 namespace circt::rtlil {
 bool isMValueType(mlir::Type type) { return isa<MValueType>(type); }
 
-ArrayAttr createParamsAttr(
+ArrayAttr createParamArrayAttr(
     mlir::MLIRContext *context,
     llvm::ArrayRef<std::tuple<llvm::StringRef, unsigned, uint64_t>> &&r) {
   llvm::SmallVector<Attribute, 5> v;

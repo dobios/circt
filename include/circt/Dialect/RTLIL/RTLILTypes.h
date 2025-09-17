@@ -5,7 +5,7 @@
 
 namespace circt::rtlil {
 bool isMValueType(mlir::Type type);
-mlir::ArrayAttr createParamsAttr(
+mlir::ArrayAttr createParamArrayAttr(
     mlir::MLIRContext *context,
     llvm::ArrayRef<std::tuple<llvm::StringRef, unsigned, uint64_t>> &&r);
 }; // namespace circt::rtlil
