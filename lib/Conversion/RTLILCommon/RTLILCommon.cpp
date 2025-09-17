@@ -46,7 +46,7 @@ mlir::Value RTLILTypeConverter::materializeInt(mlir::OpBuilder &builder,
     name = builder.getStringAttr(llvm::formatv("${0}", asOperandRaw(vals[0])));
   }
 
-  return builder.create<rtlil::WireOp>(pos, t, name, 0, 0, 0, isInput, 0, 0 );
+  return builder.create<rtlil::WireOp>(pos, t, name, 0, 0, 0, isInput, 0, 0);
 }
 
 RTLILTypeConverter::RTLILTypeConverter() : mlir::TypeConverter() {

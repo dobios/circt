@@ -18,10 +18,11 @@ include "mlir/IR/CommonAttrConstraints.td"
 
 def RTLIL_Dialect : Dialect {
     let name = "rtlil";
-    let summary = "A rtlil out-of-tree MLIR dialect.";
+    let summary = "Types and operations for RTLIL dialect";
     let description = [{
-        This dialect is minimal example to implement rtlil-world kind of sample code
-        for MLIR.
+        This dialect deifnes the `rtlil` dialect, which is used to translate
+        between CIRCT and Yosys. For more information, see the [RTLIL
+        description](https://yosyshq.readthedocs.io/projects/yosys/en/latest/yosys_internals/formats/rtlil_rep.html).
     }];
     let cppNamespace = "::circt::rtlil";
     // let hasConstantMaterializer = 1;
@@ -30,7 +31,7 @@ def RTLIL_Dialect : Dialect {
 }
 
 //===----------------------------------------------------------------------===//
-// Base rtlil operation definition.
+// Base class definitions
 //===----------------------------------------------------------------------===//
 
 class RTLIL_Op<string mnemonic, list<Trait> traits = []> :
@@ -43,6 +44,10 @@ class RTLIL_Attr<string attrName, string attrMnemonic, list<Trait> traits = []>
 
 class RTLIL_Type<string name, list<Trait> traits = []>
   : TypeDef<RTLIL_Dialect, name, traits> { }
+
+//===----------------------------------------------------------------------===//
+// Operation helper definitions
+//===----------------------------------------------------------------------===//
 
 // Parameters
 

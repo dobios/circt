@@ -291,6 +291,7 @@ struct ConstantConversion : ConversionPatternBase<hw::ConstantOp> {
 
 struct ModuleConversion : ConversionPatternBase<hw::HWModuleOp> {
   using ConversionPatternBase<hw::HWModuleOp>::ConversionPatternBase;
+
   LogicalResult
   matchAndRewrite(hw::HWModuleOp op, OpAdaptor adaptor,
                   ConversionPatternRewriter &rewriter) const override {
@@ -350,6 +351,7 @@ struct ModuleConversion : ConversionPatternBase<hw::HWModuleOp> {
 
 struct ModuleSorter : ConversionPatternBase<mlir::ModuleOp> {
   using ConversionPatternBase<mlir::ModuleOp>::ConversionPatternBase;
+
   LogicalResult
   matchAndRewrite(mlir::ModuleOp op, OpAdaptor adaptor,
                   ConversionPatternRewriter &rewriter) const override {
@@ -361,6 +363,7 @@ struct ModuleSorter : ConversionPatternBase<mlir::ModuleOp> {
 
 struct OutputConversion : ConversionPatternBase<hw::OutputOp> {
   using ConversionPatternBase<hw::OutputOp>::ConversionPatternBase;
+
   LogicalResult
   matchAndRewrite(hw::OutputOp op, OpAdaptor adaptor,
                   ConversionPatternRewriter &rewriter) const override {
@@ -382,6 +385,7 @@ struct OutputConversion : ConversionPatternBase<hw::OutputOp> {
 
 struct InstanceConversion : ConversionPatternBase<hw::InstanceOp> {
   using ConversionPatternBase<hw::InstanceOp>::ConversionPatternBase;
+
   LogicalResult
   matchAndRewrite(hw::InstanceOp op, OpAdaptor adaptor,
                   ConversionPatternRewriter &rewriter) const override {
@@ -484,8 +488,9 @@ struct ICMPConversion : ConversionPatternBase<comb::ICmpOp> {
 };
 
 } // namespace
+
 //===----------------------------------------------------------------------===//
-// Convert Comb to SMT pass
+// Convert HW to RTLIL pass
 //===----------------------------------------------------------------------===//
 
 namespace {
