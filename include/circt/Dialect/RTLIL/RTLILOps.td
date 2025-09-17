@@ -16,7 +16,7 @@ include "mlir/IR/CommonAttrConstraints.td"
 // RTLIL dialect definition.
 //===----------------------------------------------------------------------===//
 
-def RTLIL_Dialect : Dialect {
+def RTLILDialect : Dialect {
     let name = "rtlil";
     let summary = "Types and operations for RTLIL dialect";
     let description = [{
@@ -34,16 +34,16 @@ def RTLIL_Dialect : Dialect {
 // Base class definitions
 //===----------------------------------------------------------------------===//
 
-class RTLIL_Op<string mnemonic, list<Trait> traits = []> :
-        Op<RTLIL_Dialect, mnemonic, traits>;
+class RTLILOp<string mnemonic, list<Trait> traits = []> :
+        Op<RTLILDialect, mnemonic, traits>;
 
-class RTLIL_Attr<string attrName, string attrMnemonic, list<Trait> traits = []>
-    : AttrDef<RTLIL_Dialect, attrName, traits> {
+class RTLILAttr<string attrName, string attrMnemonic, list<Trait> traits = []>
+    : AttrDef<RTLILDialect, attrName, traits> {
   let mnemonic = attrMnemonic;
 }
 
-class RTLIL_Type<string name, list<Trait> traits = []>
-  : TypeDef<RTLIL_Dialect, name, traits> { }
+class RTLILType<string name, list<Trait> traits = []>
+  : TypeDef<RTLILDialect, name, traits> { }
 
 //===----------------------------------------------------------------------===//
 // Operation helper definitions
@@ -51,7 +51,7 @@ class RTLIL_Type<string name, list<Trait> traits = []>
 
 // Parameters
 
-def ParamAttr : RTLIL_Attr<"Parameter", "param"> {
+def ParamAttr : RTLILAttr<"Parameter", "param"> {
   let parameters = (ins
                     "::mlir::StringAttr":$name,
                     "::mlir::IntegerAttr":$value);
@@ -93,7 +93,7 @@ def StateEnumAttr: I8EnumAttr<"StateEnum", "RTLIL::State model",
 }
 
 // A parameterized integer type. Declares the hw::IntType in C++.
-def MValueTypeImpl : RTLIL_Type<"MValue"> {
+def MValueTypeImpl : RTLILType<"MValue"> {
   let summary = "parameterized-width RTLIL::State sequence";
   let parameters = (ins "::mlir::TypedAttr":$width);
   let typeName = "rtlil.val";
@@ -105,18 +105,18 @@ class MValueExpander  {
   string typeName = MValueTypeImpl.cppType;
 }
 
-def RTLILValue : DialectType<RTLIL_Dialect, CPred<"::circt::rtlil::isMValueType($_self)">, "value">;
+def RTLILValue : DialectType<RTLILDialect, CPred<"::circt::rtlil::isMValueType($_self)">, "value">;
 
 def ConstAttr
   : TypedArrayAttrBase<StateEnumAttr, "constant multi-valued bitvec">;
 
-def ConstOp : MValueExpander, RTLIL_Op<"const", [AllMatch<["llvm::cast<mlir::IntegerAttr>(llvm::cast<mlir::TypedValue<" # typeName # ">>($result).getType().getWidth()).getValue()", "$value.size()"], "bitwidth matches">]> {
+def ConstOp : MValueExpander, RTLILOp<"const", [AllMatch<["llvm::cast<mlir::IntegerAttr>(llvm::cast<mlir::TypedValue<" # typeName # ">>($result).getType().getWidth()).getValue()", "$value.size()"], "bitwidth matches">]> {
   let arguments = (ins ConstAttr:$value);
   let results = (outs RTLILValue:$result);
 }
 
 // TODO Is I32 correct?
-def WireOp : RTLIL_Op<"wire"> {
+def WireOp : RTLILOp<"wire"> {
   let arguments = (ins StrAttr:$name
                        ,BoolAttr:$is_signed
                        ,DefaultValuedAttr<I32Attr, "0">:$port_id
@@ -171,7 +171,7 @@ def CellOpInterface : OpInterface<"CellOpInterface"> {
   ];
 }
 
-def CellOp : RTLIL_Op<"cell", [DeclareOpInterfaceMethods<CellOpInterface>]> {
+def CellOp : RTLILOp<"cell", [DeclareOpInterfaceMethods<CellOpInterface>]> {
   let arguments = (ins StrAttr:$name
                        ,StrAttr:$type
                        ,Variadic<RTLILValue>:$connections
@@ -185,7 +185,7 @@ class FixedOperands<int n> : AllMatch<["getNumOperands()", "" # n], "has " # n #
 
 class FixedWidths<list<string> widths> : MValueExpander, TraitList<!foreach(idx, !range(widths), AllMatch<["::llvm::cast<::mlir::IntegerAttr>(::llvm::cast<"# typeName #">(getOperand(" # idx # ").getType()).getWidth()).getInt()", "" # widths[idx]], "input " # idx # " width is " # widths[idx]>)>;
 
-class BinOp<string t> : RTLIL_Op<t, [DeclareOpInterfaceMethods<CellOpInterface>, FixedOperands<3>, FixedWidths<["$width", "$width", "$width"]>]> {
+class BinOp<string t> : RTLILOp<t, [DeclareOpInterfaceMethods<CellOpInterface>, FixedOperands<3>, FixedWidths<["$width", "$width", "$width"]>]> {
   let arguments = (ins StrAttr:$name,
                       Variadic<RTLILValue>:$connections,
                       I32Attr:$width,
@@ -204,12 +204,10 @@ class BinOp<string t> : RTLIL_Op<t, [DeclareOpInterfaceMethods<CellOpInterface>,
 }
 
 def AndOp : BinOp<"and">;
+def OrOp  : BinOp<"or">;
+def SubOp : BinOp<"sub">;
 
-def OrOp : BinOp<"or">;
-
-def SubOp: BinOp<"sub">;
-
-def MuxOp : RTLIL_Op<"mux", [DeclareOpInterfaceMethods<CellOpInterface>, FixedOperands<4>, FixedWidths<["$width", "$width", "1", "$width"]>]> {
+def MuxOp : RTLILOp<"mux", [DeclareOpInterfaceMethods<CellOpInterface>, FixedOperands<4>, FixedWidths<["$width", "$width", "1", "$width"]>]> {
   let arguments = (ins StrAttr:$name,
                       Variadic<RTLILValue>:$connections,
                       I32Attr:$width,
@@ -222,7 +220,7 @@ def MuxOp : RTLIL_Op<"mux", [DeclareOpInterfaceMethods<CellOpInterface>, FixedOp
                           }], "getParameters()">;
 }
 
-class CmpOp<string t> : RTLIL_Op<t, [DeclareOpInterfaceMethods<CellOpInterface>, FixedOperands<3>, FixedWidths<["$width", "$width", "1"]>]> {
+class CmpOp<string t> : RTLILOp<t, [DeclareOpInterfaceMethods<CellOpInterface>, FixedOperands<3>, FixedWidths<["$width", "$width", "1"]>]> {
   let arguments = (ins StrAttr:$name,
                       Variadic<RTLILValue>:$connections,
                       I32Attr:$width,
@@ -247,7 +245,7 @@ def GEOp : CmpOp<"ge">;
 def LEOp : CmpOp<"le">;
 def LTOp : CmpOp<"lt">;
 
-def DFFOp : RTLIL_Op<"dff", [DeclareOpInterfaceMethods<CellOpInterface>, FixedOperands<3>, FixedWidths<["1", "$width", "$width"]>]> {
+def DFFOp : RTLILOp<"dff", [DeclareOpInterfaceMethods<CellOpInterface>, FixedOperands<3>, FixedWidths<["1", "$width", "$width"]>]> {
   let arguments = (ins StrAttr:$name,
                       Variadic<RTLILValue>:$connections,
                       I32Attr:$width,
@@ -261,7 +259,7 @@ def DFFOp : RTLIL_Op<"dff", [DeclareOpInterfaceMethods<CellOpInterface>, FixedOp
                       }], "getParameters()">;
 }
 
-def ALDFFOp : RTLIL_Op<"aldff", [DeclareOpInterfaceMethods<CellOpInterface>, FixedOperands<5>, FixedWidths<["1", "$width", "1", "$width", "$width"]>]> {
+def ALDFFOp : RTLILOp<"aldff", [DeclareOpInterfaceMethods<CellOpInterface>, FixedOperands<5>, FixedWidths<["1", "$width", "1", "$width", "$width"]>]> {
   let arguments = (ins StrAttr:$name,
                       Variadic<RTLILValue>:$connections,
                       I32Attr:$width,
@@ -276,7 +274,7 @@ def ALDFFOp : RTLIL_Op<"aldff", [DeclareOpInterfaceMethods<CellOpInterface>, Fix
                       }], "getParameters()">;
 }
 
-def IntanceOp : RTLIL_Op<"instance", [DeclareOpInterfaceMethods<CellOpInterface>]> {
+def IntanceOp : RTLILOp<"instance", [DeclareOpInterfaceMethods<CellOpInterface>]> {
   let arguments = (ins StrAttr:$name,
                        FlatSymbolRefAttr:$type,
                        Variadic<RTLILValue>:$connections,
@@ -285,7 +283,7 @@ def IntanceOp : RTLIL_Op<"instance", [DeclareOpInterfaceMethods<CellOpInterface>
   );
 }
 
-def WConnectionOp : RTLIL_Op<"wconnection"> {
+def WConnectionOp : RTLILOp<"wconnection"> {
   let arguments = (ins RTLILValue:$lhs, RTLILValue:$rhs);
 }
                       //  , // TODO back to FlatSymbolRefAttr?
