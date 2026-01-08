@@ -260,6 +260,24 @@ def DFFOp : RTLILOp<"dff", [DeclareOpInterfaceMethods<CellOpInterface>, FixedOpe
                       }], "getParameters()">;
 }
 
+def ConcatOp : RTLILOp<"concat", [DeclareOpInterfaceMethods<CellOpInterface>, FixedOperands<3>, FixedWidths<["$widthA", "$widthB", "::llvm::cast<::mlir::IntegerAttr>(getWidthY()).getInt()"]>]> {
+  let arguments = (ins StrAttr:$name,
+                Variadic<RTLILValue>:$connections,
+                              I32Attr:$widthA,
+                              I32Attr:$widthB,
+                              DefaultValuedAttr<StrAttr, [{"$$concat"}]>:$type,
+                              DefaultValuedAttr<StrArrayAttr, [{ {"\\A", "\\B", "\\Y"} }]>:$ports);
+  DerivedAttr widthY = DerivedAttr<"::mlir::IntegerAttr", [{
+    return mlir::IntegerAttr::get(mlir::IntegerType::get(getContext(), 32), getWidthA() + getWidthB());
+  }], "getWidthY()">;
+  DerivedAttr parameters = DerivedAttr<"::mlir::ArrayAttr", [{
+                            return ::circt::rtlil::createParamArrayAttr(getContext(), {
+                              {"\\A_WIDTH", 32, getWidthA()},
+                              {"\\B_WIDTH", 32, getWidthB()},
+                            });
+                              }], "getParameters()">;
+}
+
 def ALDFFOp : RTLILOp<"aldff", [DeclareOpInterfaceMethods<CellOpInterface>, FixedOperands<5>, FixedWidths<["1", "$width", "1", "$width", "$width"]>]> {
   let arguments = (ins StrAttr:$name,
                       Variadic<RTLILValue>:$connections,

@@ -488,6 +488,60 @@ struct ICMPConversion : ConversionPatternBase<comb::ICmpOp> {
   }
 };
 
+struct ConcatConversion : ConversionPatternBase<comb::ConcatOp> {
+  using ConversionPatternBase<comb::ConcatOp>::ConversionPatternBase;
+
+  LogicalResult
+  matchAndRewrite(comb::ConcatOp op, OpAdaptor adaptor,
+                  ConversionPatternRewriter &rewriter) const override {
+
+    if (op.getNumOperands() < 2)
+      return failure();
+
+    Value currentResult = adaptor.getInputs().back();
+    unsigned currentWidth =
+        op.getInputs().back().getType().getIntOrFloatBitWidth();
+
+    const auto &isSigned = op.getResult().getType().isSignedInteger();
+
+    // Yosys RTLIL concat cell has two inputs.
+    // comb::ConcatOp has variadic operands, chain the inputs.
+    // To better match the Yosys RTLIL concat cell, start at the LSB value
+    for (int i = op.getNumOperands() - 2; i >= 0; --i) {
+      unsigned operandWidth =
+          op.getInputs()[i].getType().getIntOrFloatBitWidth();
+      unsigned resultWidth = currentWidth + operandWidth;
+
+      // Create a type for the intermediate result with the combined width
+      auto targetType =
+          getTypeConverter()->convertType(rewriter.getIntegerType(resultWidth));
+      if (!targetType)
+        return failure();
+
+      rtlil::WireOp resultWire =
+          rtlil::WireOp::create(rewriter, op->getLoc(), targetType,
+                                genUniqueLocalName(rewriter), isSigned);
+      if (!resultWire)
+        return failure();
+
+      rewriter.modifyOpInPlace(
+          resultWire, [&] { resultWire.setNameAttr(genUniqueLocalName(rewriter)); });
+
+      // Second operand is the MSB side
+      std::vector<Value> connections = {currentResult, adaptor.getInputs()[i],
+                                        resultWire};
+      rtlil::ConcatOp::create(rewriter, op->getLoc(), genUniqueLocalName(rewriter),
+                              std::move(connections), currentWidth,
+                              operandWidth);
+      currentResult = resultWire;
+      currentWidth = resultWidth;
+    }
+
+    rewriter.replaceOp(op, currentResult);
+    return success();
+  }
+};
+
 } // namespace
 
 //===----------------------------------------------------------------------===//
@@ -520,8 +574,8 @@ static void populateHWToRTLILConversionPatterns(
       BinOpConversion<SubOp, rtlil::SubOp>, BinOpConversion<OrOp, rtlil::OrOp>,
       MuxOpConversion, InstanceConversion, CompRegOpResetConversion,
       CompRegOpConversion, FirRegOpResetConversion, FirRegOpConversion,
-      ConstantConversion, ICMPConversion>(converter, rtlilContext,
-                                          patterns.getContext());
+      ConstantConversion, ConcatConversion, ICMPConversion>(
+      converter, rtlilContext, patterns.getContext());
 }
 
 void ConvertHWToRTLILPass::runOnOperation() {
