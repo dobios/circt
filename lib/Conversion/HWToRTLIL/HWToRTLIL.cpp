@@ -515,6 +515,7 @@ static void populateHWToRTLILConversionPatterns(
     RewritePatternSet &patterns) {
   patterns.add<
       ModuleConversion, OutputConversion, BinOpConversion<AndOp, rtlil::AndOp>,
+      BinOpConversion<AddOp, rtlil::AddOp>,
       BinOpConversion<SubOp, rtlil::SubOp>, BinOpConversion<OrOp, rtlil::OrOp>,
       MuxOpConversion, InstanceConversion, CompRegOpResetConversion,
       CompRegOpConversion, FirRegOpResetConversion, FirRegOpConversion,

@@ -205,6 +205,7 @@ class BinOp<string t> : RTLILOp<t, [DeclareOpInterfaceMethods<CellOpInterface>, 
 
 def AndOp : BinOp<"and">;
 def OrOp  : BinOp<"or">;
+def AddOp : BinOp<"add">;
 def SubOp : BinOp<"sub">;
 
 def MuxOp : RTLILOp<"mux", [DeclareOpInterfaceMethods<CellOpInterface>, FixedOperands<4>, FixedWidths<["$width", "$width", "1", "$width"]>]> {
