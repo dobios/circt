@@ -542,6 +542,22 @@ struct ConcatConversion : ConversionPatternBase<comb::ConcatOp> {
   }
 };
 
+struct ExtractConversion : ConversionPatternBase<comb::ExtractOp> {
+  using ConversionPatternBase<comb::ExtractOp>::ConversionPatternBase;
+  LogicalResult
+  matchAndRewrite(comb::ExtractOp op, OpAdaptor adaptor,
+                  ConversionPatternRewriter &rewriter) const override {
+    auto resultWire = genLocalWire(op->getLoc(), op.getResult(), rewriter);
+    rtlil::SliceOp::create(rewriter, op->getLoc(), genUniqueLocalName(rewriter),
+                           {adaptor.getInput(), resultWire},
+                           op.getInput().getType().getIntOrFloatBitWidth(),
+                           op.getResult().getType().getIntOrFloatBitWidth(),
+                           op.getLowBit());
+    rewriter.replaceOp(op, resultWire);
+    return success();
+  }
+};
+
 } // namespace
 
 //===----------------------------------------------------------------------===//
@@ -574,7 +590,7 @@ static void populateHWToRTLILConversionPatterns(
       BinOpConversion<SubOp, rtlil::SubOp>, BinOpConversion<OrOp, rtlil::OrOp>,
       MuxOpConversion, InstanceConversion, CompRegOpResetConversion,
       CompRegOpConversion, FirRegOpResetConversion, FirRegOpConversion,
-      ConstantConversion, ConcatConversion, ICMPConversion>(
+      ConstantConversion, ConcatConversion, ExtractConversion, ICMPConversion>(
       converter, rtlilContext, patterns.getContext());
 }
 
