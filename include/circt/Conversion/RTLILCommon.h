@@ -98,19 +98,23 @@ public:
                         rtlil::ConversionPatternContext &rtlilContext,
                         mlir::MLIRContext *context)
       : Super(typeConverter, context), rtlilContext(rtlilContext) {}
+
   template <typename S>
   mlir::StringAttr getStr(S &&s) const {
     return mlir::StringAttr::get(Super::getContext(), s);
   }
+
   mlir::IntegerAttr getInt(int32_t i) const {
     return mlir::IntegerAttr::get(
         mlir::IntegerType::get(Super::getContext(), 32), i);
   }
+
   template <typename S>
   rtlil::ParameterAttr getParameter(S &&key, int32_t val) const {
     return rtlil::ParameterAttr::get(Super::getContext(), getStr(key),
                                      getInt(val));
   }
+
   template <typename S>
   rtlil::ParameterAttr getParameter(S &&key, mlir::IntegerAttr val) const {
     return rtlil::ParameterAttr::get(Super::getContext(), getStr(key), val);
@@ -127,19 +131,24 @@ public:
     auto res = llvm::formatv("\\{0}_{1}", s, it->second);
     return r.getStringAttr(res);
   }
+
   template <typename S>
   mlir::StringAttr makeLocal(mlir::ConversionPatternRewriter &r, S s) const {
     auto res = llvm::formatv("${0}", s);
     return r.getStringAttr(res);
   }
-  mlir::StringAttr genLocal(mlir::ConversionPatternRewriter &r) const {
+
+  mlir::StringAttr
+  genUniqueLocalName(mlir::ConversionPatternRewriter &r) const {
     auto v = ++rtlilContext.nameCtr;
     return r.getStringAttr(llvm::formatv("${0}", v));
   }
+
   mlir::StringAttr asOperand(mlir::ConversionPatternRewriter &r,
                              Value v) const {
     return r.getStringAttr(rtlil::asOperandRaw(v));
   }
+
   rtlil::WireOp genLocalWire(Location l, Value v,
                              mlir::ConversionPatternRewriter &rewriter) const {
     auto t = Super::getTypeConverter()->convertType(v.getType());
@@ -149,8 +158,8 @@ public:
                                ->materializeTargetConversion(rewriter, l, t, v)
                                .template getDefiningOp<rtlil::WireOp>();
     if (result)
-      rewriter.modifyOpInPlace(result,
-                               [&] { result.setNameAttr(genLocal(rewriter)); });
+      rewriter.modifyOpInPlace(
+          result, [&] { result.setNameAttr(genUniqueLocalName(rewriter)); });
     return result;
   }
 };
