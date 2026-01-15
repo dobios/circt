@@ -77,8 +77,8 @@ struct CompRegOpResetConversion : ConversionPatternBase<seq::CompRegOp> {
     std::vector<Value> connections({adaptor.getClk(), adaptor.getInput(),
                                     adaptor.getReset(), adaptor.getResetValue(),
                                     resultWire});
-    rewriter.create<rtlil::ALDFFOp>(op->getLoc(), name, std::move(connections),
-                                    resultWire.getWidth());
+    rtlil::ALDFFOp::create(rewriter, op->getLoc(), name, std::move(connections),
+                           resultWire.getWidth());
     rewriter.replaceOp(op, resultWire);
     return success();
   }
@@ -102,8 +102,8 @@ struct CompRegOpConversion : ConversionPatternBase<seq::CompRegOp> {
                     : genUniqueLocalName(rewriter);
     std::vector<Value> connections(
         {adaptor.getClk(), adaptor.getInput(), resultWire});
-    rewriter.create<rtlil::DFFOp>(op.getLoc(), name, std::move(connections),
-                                  resultWire.getWidth());
+    rtlil::DFFOp::create(rewriter, op.getLoc(), name, std::move(connections),
+                         resultWire.getWidth());
     rewriter.replaceOp(op, resultWire);
     return success();
   }
@@ -127,8 +127,8 @@ struct FirRegOpConversion : ConversionPatternBase<seq::FirRegOp> {
                     : genUniqueLocalName(rewriter);
     std::vector<Value> connections(
         {adaptor.getClk(), adaptor.getNext(), resultWire});
-    rewriter.create<rtlil::DFFOp>(op.getLoc(), name, std::move(connections),
-                                  resultWire.getWidth());
+    rtlil::DFFOp::create(rewriter, op.getLoc(), name, std::move(connections),
+                         resultWire.getWidth());
     rewriter.replaceOp(op, resultWire);
     return success();
   }
@@ -153,8 +153,8 @@ struct FirRegOpResetConversion : ConversionPatternBase<seq::FirRegOp> {
                                     adaptor.getReset(), adaptor.getResetValue(),
                                     resultWire});
     if (op.getIsAsync()) {
-      rewriter.create<rtlil::ALDFFOp>(
-          op->getLoc(), name, std::move(connections), resultWire.getWidth());
+      rtlil::ALDFFOp::create(rewriter, op->getLoc(), name,
+                             std::move(connections), resultWire.getWidth());
     } else {
       rtlil::WireOp bufferedResetWire =
           genLocalWire(op->getLoc(), op.getReset(), rewriter);
@@ -165,18 +165,20 @@ struct FirRegOpResetConversion : ConversionPatternBase<seq::FirRegOp> {
           return failure();
         Value connections[3] = {adaptor.getClk(), adaptor.getReset(),
                                 syncedResetWire};
-        rewriter.create<rtlil::DFFOp>(op.getLoc(), genUniqueLocalName(rewriter),
-                                      connections, syncedResetWire.getWidth());
+        rtlil::DFFOp::create(rewriter, op.getLoc(),
+                             genUniqueLocalName(rewriter), connections,
+                             syncedResetWire.getWidth());
         Value connections2[3] = {syncedResetWire, adaptor.getReset(),
                                  bufferedResetWire};
-        rewriter.create<rtlil::AndOp>(
-            op->getLoc(), genUniqueLocalName(rewriter), connections2, 1, false);
+        rtlil::AndOp::create(rewriter, op->getLoc(),
+                             genUniqueLocalName(rewriter), connections2, 1,
+                             false);
       }
       std::vector<Value> connections({adaptor.getClk(), adaptor.getNext(),
                                       bufferedResetWire,
                                       adaptor.getResetValue(), resultWire});
-      rewriter.create<rtlil::ALDFFOp>(
-          op->getLoc(), name, std::move(connections), resultWire.getWidth());
+      rtlil::ALDFFOp::create(rewriter, op->getLoc(), name,
+                             std::move(connections), resultWire.getWidth());
     }
     rewriter.replaceOp(op, resultWire);
     return success();
@@ -203,8 +205,8 @@ struct BinOpConversion<BinOp, ResultOp,
     auto resultWire = Super::genLocalWire(op->getLoc(), op->getResult(0), r);
     std::vector<Value> connections(
         {adaptor.getInputs()[0], adaptor.getInputs()[1], resultWire});
-    r.create<ResultOp>(
-        op->getLoc(), Super::genUniqueLocalName(r), std::move(connections),
+    ResultOp::create(
+        r, op->getLoc(), Super::genUniqueLocalName(r), std::move(connections),
         op.getInputs()[0].getType().getIntOrFloatBitWidth(), false);
     r.replaceOp(op, resultWire);
     return success();
@@ -228,9 +230,9 @@ struct BinOpConversion<BinOp, ResultOp,
     auto resultWire = Super::genLocalWire(op->getLoc(), op->getResult(0), r);
     std::vector<Value> connections(
         {adaptor.getLhs(), adaptor.getRhs(), resultWire});
-    r.create<ResultOp>(op->getLoc(), Super::genUniqueLocalName(r),
-                       std::move(connections),
-                       op.getLhs().getType().getIntOrFloatBitWidth(), false);
+    ResultOp::create(r, op->getLoc(), Super::genUniqueLocalName(r),
+                     std::move(connections),
+                     op.getLhs().getType().getIntOrFloatBitWidth(), false);
     r.replaceOp(op, resultWire);
     return success();
   }
@@ -249,8 +251,8 @@ struct MuxOpConversion : ConversionPatternBase<MuxOp> {
     Value connections[4] = {adaptor.getFalseValue(), adaptor.getTrueValue(),
                             adaptor.getCond(), resultWire};
 
-    r.create<rtlil::MuxOp>(op->getLoc(), genUniqueLocalName(r), connections,
-                           op.getTrueValue().getType().getIntOrFloatBitWidth());
+    rtlil::MuxOp::create(r, op->getLoc(), genUniqueLocalName(r), connections,
+                         op.getTrueValue().getType().getIntOrFloatBitWidth());
     r.replaceOp(op, resultWire);
 
     return success();
@@ -304,8 +306,9 @@ struct ModuleConversion : ConversionPatternBase<hw::HWModuleOp> {
       rtlilContext.portMap.clear();
     }
 
-    auto moduleOp = rewriter.create<mlir::ModuleOp>(
-        op.getLoc(), makeGlobal(rewriter, op.getSymName(), op->getLoc()));
+    auto moduleOp = mlir::ModuleOp::create(
+        rewriter, op.getLoc(),
+        makeGlobal(rewriter, op.getSymName(), op->getLoc()));
     mlir::TypeConverter::SignatureConversion converter(op.getNumInputPorts());
     for (size_t input = 0; input < op.getNumInputPorts(); input++) {
       rewriter.setInsertionPoint(moduleOp.getBody(),
@@ -424,8 +427,8 @@ struct InstanceConversion : ConversionPatternBase<hw::InstanceOp> {
       resultWires.emplace_back(wire);
     }
 
-    rewriter.create<rtlil::IntanceOp>(
-        op->getLoc(),
+    rtlil::IntanceOp::create(
+        rewriter, op->getLoc(),
         makeGlobal(rewriter, op.getInstanceNameAttr(), op->getLoc()),
         makeGlobal(rewriter, op.getModuleName(), definingOp->getLoc()),
         resultWires, rewriter.getArrayAttr(ports), rewriter.getArrayAttr({}));
@@ -451,42 +454,42 @@ struct ICMPConversion : ConversionPatternBase<comb::ICmpOp> {
                                   resultWire};
     switch (pred) {
     case ICmpPredicate::eq:
-      rewriter.create<rtlil::EQOp>(
-          op->getLoc(), genUniqueLocalName(rewriter), connections,
-          op.getLhs().getType().getIntOrFloatBitWidth(), false);
+      rtlil::EQOp::create(rewriter, op->getLoc(), genUniqueLocalName(rewriter),
+                          connections,
+                          op.getLhs().getType().getIntOrFloatBitWidth(), false);
       break;
     case ICmpPredicate::ne:
-      rewriter.create<rtlil::NEOp>(
-          op->getLoc(), genUniqueLocalName(rewriter), connections,
-          op.getLhs().getType().getIntOrFloatBitWidth(), false);
+      rtlil::NEOp::create(rewriter, op->getLoc(), genUniqueLocalName(rewriter),
+                          connections,
+                          op.getLhs().getType().getIntOrFloatBitWidth(), false);
       break;
     case ICmpPredicate::ugt:
     case ICmpPredicate::sgt:
-      rewriter.create<rtlil::GTOp>(
-          op->getLoc(), genUniqueLocalName(rewriter), connections,
-          op.getLhs().getType().getIntOrFloatBitWidth(),
-          pred == ICmpPredicate::sgt);
+      rtlil::GTOp::create(rewriter, op->getLoc(), genUniqueLocalName(rewriter),
+                          connections,
+                          op.getLhs().getType().getIntOrFloatBitWidth(),
+                          pred == ICmpPredicate::sgt);
       break;
     case ICmpPredicate::ult:
     case ICmpPredicate::slt:
-      rewriter.create<rtlil::LTOp>(
-          op->getLoc(), genUniqueLocalName(rewriter), connections,
-          op.getLhs().getType().getIntOrFloatBitWidth(),
-          pred == ICmpPredicate::slt);
+      rtlil::LTOp::create(rewriter, op->getLoc(), genUniqueLocalName(rewriter),
+                          connections,
+                          op.getLhs().getType().getIntOrFloatBitWidth(),
+                          pred == ICmpPredicate::slt);
       break;
     case ICmpPredicate::ule:
     case ICmpPredicate::sle:
-      rewriter.create<rtlil::LEOp>(
-          op->getLoc(), genUniqueLocalName(rewriter), connections,
-          op.getLhs().getType().getIntOrFloatBitWidth(),
-          pred == ICmpPredicate::sle);
+      rtlil::LEOp::create(rewriter, op->getLoc(), genUniqueLocalName(rewriter),
+                          connections,
+                          op.getLhs().getType().getIntOrFloatBitWidth(),
+                          pred == ICmpPredicate::sle);
       break;
     case ICmpPredicate::uge:
     case ICmpPredicate::sge:
-      rewriter.create<rtlil::GEOp>(
-          op->getLoc(), genUniqueLocalName(rewriter), connections,
-          op.getLhs().getType().getIntOrFloatBitWidth(),
-          pred == ICmpPredicate::sge);
+      rtlil::GEOp::create(rewriter, op->getLoc(), genUniqueLocalName(rewriter),
+                          connections,
+                          op.getLhs().getType().getIntOrFloatBitWidth(),
+                          pred == ICmpPredicate::sge);
       break;
     default:
       return failure();
