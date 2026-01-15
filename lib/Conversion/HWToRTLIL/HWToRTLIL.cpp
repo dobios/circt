@@ -303,11 +303,13 @@ struct ModuleConversion : ConversionPatternBase<hw::HWModuleOp> {
       auto guard = rtlilContext.lock();
       rtlilContext.portMap.clear();
     }
-    auto result = rewriter.create<mlir::ModuleOp>(
+
+    auto moduleOp = rewriter.create<mlir::ModuleOp>(
         op.getLoc(), makeGlobal(rewriter, op.getSymName(), op->getLoc()));
     mlir::TypeConverter::SignatureConversion converter(op.getNumInputPorts());
     for (size_t input = 0; input < op.getNumInputPorts(); input++) {
-      rewriter.setInsertionPoint(result.getBody(), result.getBody()->begin());
+      rewriter.setInsertionPoint(moduleOp.getBody(),
+                                 moduleOp.getBody()->begin());
       Value replacement = getTypeConverter()->materializeTargetConversion(
           rewriter, op->getLoc(),
           getTypeConverter()->convertType(op.getInputTypes()[input]), {});
@@ -320,14 +322,19 @@ struct ModuleConversion : ConversionPatternBase<hw::HWModuleOp> {
       });
       converter.remapInput(input, replacement);
     }
+
+    // Search for hw.output op in the body of the block
     std::optional<hw::OutputOp> foundOp = std::nullopt;
     for (auto it = op.getBodyBlock()->rbegin(); it != op.getBodyBlock()->rend();
          ++it) {
       auto outputOp = llvm::dyn_cast_or_null<hw::OutputOp>(*it);
-      if (outputOp) {
+      if (outputOp)
         foundOp = outputOp;
-      }
     }
+
+    // The module uses outputs.
+    // Save the output information to a map for use in update of the output
+    // wires. Use an unique name for the output wires..
     if (foundOp) {
       for (size_t output = 0; output < op.getNumOutputPorts(); output++) {
         auto guard = rtlilContext.lock();
@@ -341,11 +348,13 @@ struct ModuleConversion : ConversionPatternBase<hw::HWModuleOp> {
           return failure();
       }
     }
+    // Apply type conversion to block signature, then inline the converted block
+    // into the module.
     rewriter.applySignatureConversion(op.getBodyBlock(), converter,
                                       getTypeConverter());
     rewriter.inlineBlockBefore(&op.getBody().getBlocks().front(),
-                               result.getBody(), result.getBody()->end());
-    rewriter.replaceOp(op, result);
+                               moduleOp.getBody(), moduleOp.getBody()->end());
+    rewriter.replaceOp(op, moduleOp);
     return success();
   }
 };
@@ -368,15 +377,15 @@ struct OutputConversion : ConversionPatternBase<hw::OutputOp> {
   LogicalResult
   matchAndRewrite(hw::OutputOp op, OpAdaptor adaptor,
                   ConversionPatternRewriter &rewriter) const override {
-    auto outputs = adaptor.getOutputs();
-    int i = 0;
-    for (auto wire : outputs) {
+    for (const auto &en : llvm::enumerate(adaptor.getOutputs())) {
+      auto wire = en.value();
+      size_t i = en.index();
       auto op = wire.getDefiningOp<rtlil::WireOp>();
       auto guard = rtlilContext.lock();
       rewriter.modifyOpInPlace(op, [&] {
         op.setPortOutput(true);
         op.setPortId(rtlilContext.portMap[i].first + 1);
-        op.setName(rtlilContext.portMap[i++].second);
+        op.setName(rtlilContext.portMap[i].second);
       });
     }
     rewriter.eraseOp(op);

@@ -78,7 +78,7 @@ class RTLILTypeConverter : public mlir::TypeConverter {
 
   static mlir::Value materializeInt(mlir::OpBuilder &builder,
                                     circt::rtlil::MValueType t,
-                                    mlir::ValueRange vals, mlir::Location pos);
+                                    mlir::ValueRange vals, mlir::Location loc);
 
 public:
   RTLILTypeConverter();
