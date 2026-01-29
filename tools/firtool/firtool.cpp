@@ -507,7 +507,7 @@ static LogicalResult processBuffer(
         return failure();
 
     // Add passes specific to RTLIL emission
-    if (outputFormat == OutputIRRTLIL)
+    if (outputFormat  == OutputIRRTLIL || outputFormat == OutputIRHW)
       if (failed(firtool::populateHWToRTLIL(pm, firtoolOptions)))
         return failure();
 
