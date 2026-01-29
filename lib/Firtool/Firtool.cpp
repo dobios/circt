@@ -10,6 +10,7 @@
 #include "circt/Conversion/Passes.h"
 #include "circt/Dialect/FIRRTL/FIRRTLOps.h"
 #include "circt/Dialect/FIRRTL/Passes.h"
+#include "circt/Dialect/RTLIL/RTLILPasses.h"
 #include "circt/Dialect/HW/HWPasses.h"
 #include "circt/Dialect/OM/OMPasses.h"
 #include "circt/Dialect/SV/SVPasses.h"
@@ -446,6 +447,13 @@ LogicalResult firtool::populateHWToBTOR2(mlir::PassManager &pm,
   pm.addNestedPass<hw::HWModuleOp>(circt::verif::createPrepareForFormalPass());
   pm.addPass(circt::hw::createFlattenModules());
   pm.addPass(circt::createConvertHWToBTOR2Pass(os));
+  return success();
+}
+
+LogicalResult firtool::populateHWToRTLIL(mlir::PassManager &pm,
+                                         const FirtoolOptions &opt) {
+  pm.addPass(circt::hw::createFlattenModules());
+  pm.addPass(circt::createConvertHWToRTLIL());
   return success();
 }
 

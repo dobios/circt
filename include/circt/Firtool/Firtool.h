@@ -481,6 +481,9 @@ LogicalResult populateHWToBTOR2(mlir::PassManager &pm,
                                 const FirtoolOptions &opt,
                                 llvm::raw_ostream &os);
 
+LogicalResult populateHWToRTLIL(mlir::PassManager &pm,
+                                const FirtoolOptions &opt);
+
 } // namespace firtool
 } // namespace circt
 
