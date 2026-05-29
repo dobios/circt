@@ -2,7 +2,7 @@
 
 This dialect provides a collection of operations useful for encoding purely functional concepts.
 The goal of the lambda calculus dialect is to, as the name suggests, better capture the high-level design information held by front-ends implementing a functional programming paradigm. 
-This should enable better support for functional hardware languages, such as Clash or Spade, in CIRCT. 
+This should enable better support for functional hardware languages, such as [Clash](https://clash-lang.org/) or [Spade](https://spade-lang.org/), in CIRCT. 
 
 [TOC]
 
@@ -22,7 +22,9 @@ The main components that we want to encode in `lc` are core elements from functi
 
 1. **Algebraic Data Types (ADTs)**: A core component of all modern functional languages is the concept of ADTs, which allow the user to specific an abstract data type with sub-types that are mainly composed of data components (think of struct fields) that can then be used in a **pattern match** (another key concept we need to support) in order to specify the behavior of a certain sub-case. In hardware terms, think of FSMs as the ADT, and defining how each state behaves as a pattern match, for low-level programmers, think of a series of structs that you want to use as an enum.  
 
-2. **Lambdas**:  
+2. **Lambdas**: Unlike the functions available in MLIR's `func` dialect, lambdas represent anonymous *first-class* objects. This means that a lambda in `lc` is a value in itself and can be used as a block argument. Not only that but lambdas can take other lambdas as input, meaning that they can describe *higer-order functions*, i.e. functions that operate on, and result in, other functions. These additional functionalities are a core component of any functional language, which is why we need to encode as such in CIRCT.    
+
+3. **Recursion**: Probably the most important feature in any functional language is recursion. This allows one to describe self-looping function or pattern matches in a compact and intuitive manner. Recursion just so happens to map cleaning to hardware, as cycles are quite common in designs. We encode recursion in `lc` using *recursive value bindings*, which allow us to call a lambda in a recursive loop by *binding* one of its inputs recursively to its outputs. This enables an easy encoding of strucutres representing moore or mealy machines.
  
 ## Example: Clash  
 
@@ -131,7 +133,7 @@ hw.module @topEntity (%op: i8, %clk: !seq.clock, %rst: i1, %en: i1) -> (i8) {
 ```  
 
 This mapping can be done trivially from systemFC (the haskell compiler's intermediate representation), without having to do any costly analysis of the haskell source. 
-We can then easily analyze the structure of our design in CIRCT, and e.g. identify the presence of an FSM by analysing the body of the recurcive value biding defined in the source's [`mealy`](https://hackage-content.haskell.org/package/clash-prelude-1.8.2/docs/Clash-Prelude-Mealy.html) function and in `lc`'s `lc.lrec` function.  
+We can then easily analyze the structure of our design in CIRCT, and e.g. identify the presence of an FSM by analysing the body of the recurcive value biding defined in the source's [`mealy`](https://hackage-content.haskell.org/package/clash-prelude-1.8.2/docs/Clash-Prelude-Mealy.html) function and in `lc`'s `lc.lrec` operation.  
   
 ```mlir
 hw.module @topEntity (%op: i8, %clk: !seq.clock, %rst: i1, %en: i1) -> (i8) {
@@ -206,4 +208,59 @@ hw.module @topEntity (%op: i8, %clk: !seq.clock, %rst: i1, %en: i1) -> (i8) {
   hw.output %out: i8
 }
 ```
+
+## Types
+
+The `lc` dialect encodes ADTs and Lambdas in the type system using:
+```mlir
+!lc.adt_type<@sym> // @Sym refers to the symbol of an `lc.adt` op
+!lc.lambda_type<<input_types...>, <output_types...>>
+```
+This allows the type system to enforce that the correct ADT is used e.g. in a pattern match. 
+Without this one could mix two cases from different ADTs in a single pattern match, which would not make sense.
+
+For example:
+```mlir
+lc.adt @C_State {
+    lc.adt_case @Idle
+    lc.adt_case @Busy(x: i8)
+    lc.adt_case @Done(x: i8)
+}
+
+lc.adt @L_State {
+    lc.adt_case @On
+    lc.adt_case @Off
+    lc.adt_case @Unknown
+}
+
+%lbd = lc.lambda (%state: !lc.adt_type<@C_State>) -> ... {...}
+%s = lc.adt_constant @L_State::@On : !lc.adt_type<@L_State>
+
+// Typing error, %s is not of type @C_State
+%0 = lc.call %lbd, %s
+
+%rs, %ro = lc.adt_match %state -> (!lc.adt_type<@C_State>, ...) {
+    // Type error, @L_State::@On is not a case of @C_State
+    lc.match_case @L_State::@On {...}
+    ...
+}
+
+```
+
+Lambda types are used to specify lambdas in block arguments, where regular function types would not be allowed.
+
+For example:
+```mlir
+lc.lambda (%f : !lc.lambda_type<<i1, i1>, <i2>>) -> i2 {...}
+```
+
+[include "Dialects/LCTypes.md"]
+
+## Operations
+
+[include "Dialects/LCOps.md"]  
+ 
+## Further Reading  
+
+To learn more about the motivation behind `lc` and a concrete application of it, I recommend reading the LATTE'26 paper: [Encoding Purely Functional Languages in an RTL-based Compiler](https://capra.cs.cornell.edu/latte26/paper/latte26-final14.pdf).  
 
