@@ -29,6 +29,8 @@
 #include "circt/Dialect/OM/OMDialect.h"
 #include "circt/Dialect/OM/OMOps.h"
 #include "circt/Dialect/OM/OMPasses.h"
+#include "circt/Dialect/RTLIL/RTLIL.h"
+#include "circt/Dialect/RTLIL/RTLILPasses.h"
 #include "circt/Dialect/SV/SVDialect.h"
 #include "circt/Dialect/SV/SVPasses.h"
 #include "circt/Dialect/Seq/SeqDialect.h"
@@ -176,6 +178,7 @@ enum OutputFormatKind {
   OutputIRHW,
   OutputIRSV,
   OutputIRVerilog,
+  OutputIRRTLIL,
   OutputVerilog,
   OutputBTOR2,
   OutputSplitVerilog,
@@ -191,6 +194,7 @@ static cl::opt<OutputFormatKind> outputFormat(
         clEnumValN(OutputIRFir, "ir-fir", "Emit FIR dialect after pipeline"),
         clEnumValN(OutputIRHW, "ir-hw", "Emit HW dialect"),
         clEnumValN(OutputIRSV, "ir-sv", "Emit SV dialect"),
+        clEnumValN(OutputIRRTLIL, "ir-il", "Emit RTLIL dialect"),
         clEnumValN(OutputIRVerilog, "ir-verilog",
                    "Emit IR after Verilog lowering"),
         clEnumValN(OutputVerilog, "verilog", "Emit Verilog"),
@@ -517,6 +521,11 @@ static LogicalResult processBuffer(
                                             (*outputFile)->os())))
         return failure();
 
+    // Add passes specific to RTLIL emission
+    if (outputFormat  == OutputIRRTLIL || outputFormat == OutputIRHW)
+      if (failed(firtool::populateHWToRTLIL(pm, firtoolOptions)))
+        return failure();
+
     // If requested, emit the HW IR to hwOutFile.
     if (!hwOutFile.empty())
       pm.addPass(std::make_unique<DumpIRPass>(hwOutFile.getValue()));
@@ -584,7 +593,8 @@ static LogicalResult processBuffer(
     return failure();
 
   if (outputFormat == OutputIRFir || outputFormat == OutputIRHW ||
-      outputFormat == OutputIRSV || outputFormat == OutputIRVerilog) {
+      outputFormat == OutputIRSV || outputFormat == OutputIRVerilog ||
+      outputFormat == OutputIRRTLIL) {
     auto outputTimer = ts.nest("Print .mlir output");
     if (failed(printOp(*module, (*outputFile)->os())))
       return failure();
@@ -827,7 +837,7 @@ static LogicalResult executeFirtool(MLIRContext &context,
   // Register our dialects.
   context.loadDialect<chirrtl::CHIRRTLDialect, emit::EmitDialect,
                       firrtl::FIRRTLDialect, hw::HWDialect, comb::CombDialect,
-                      seq::SeqDialect, om::OMDialect, sv::SVDialect,
+                      seq::SeqDialect, om::OMDialect, rtlil::RTLILDialect, sv::SVDialect,
                       verif::VerifDialect, ltl::LTLDialect, debug::DebugDialect,
                       sim::SimDialect>();
 
@@ -901,6 +911,7 @@ int main(int argc, char **argv) {
     registerLowerVerifToSVPass();
     registerLowerLTLToCorePass();
     registerConvertHWToBTOR2Pass();
+    registerConvertHWToRTLIL();
   }
 
   // Register any pass manager command line options.

@@ -21,6 +21,7 @@ target_link_libraries(firtool PRIVATE
   CIRCTSim
   CIRCTSVTransforms
   CIRCTTransforms
+  CIRCTHWToRTLIL
   CIRCTFirtool
   CIRCTTargetDebugInfo
 
